@@ -1,0 +1,89 @@
+{
+  "projectType": "api-service",
+  "projectName": "TelegrmBot API",
+  "projectDescription": "Java REST API with Telegram integration and AI-powered responses using hexagonal architecture",
+  "theme": "aspen",
+  "primaryColor": "#fcc72c",
+  "lightColor": "#f5d8d5",
+  "darkColor": "#1c3c44",
+  "navigation": {
+    "tabs": [
+      {
+        "tab": "Documentation",
+        "groups": [
+          {
+            "group": "Get Started",
+            "pages": [
+              "introduction",
+              "quickstart",
+              "installation"
+            ]
+          },
+          {
+            "group": "Architecture",
+            "pages": [
+              "architecture/overview",
+              "architecture/hexagonal-architecture",
+              "architecture/domain-model",
+              "architecture/ports-and-adapters"
+            ]
+          },
+          {
+            "group": "Guides",
+            "pages": [
+              "guides/configuration",
+              "guides/telegram-setup",
+              "guides/ai-configuration",
+              "guides/authentication",
+              "guides/development"
+            ]
+          },
+          {
+            "group": "Deployment",
+            "pages": [
+              "deployment/docker",
+              "deployment/environment-variables",
+              "deployment/local-development"
+            ]
+          }
+        ]
+      },
+      {
+        "tab": "API Reference",
+        "groups": [
+          {
+            "group": "Endpoints",
+            "pages": [
+              "api/overview",
+              "api/authentication",
+              "api/conversations",
+              "api/messages"
+            ]
+          }
+        ]
+      }
+    ]
+  },
+  "keyFeatures": [
+    "JWT-based user authentication",
+    "Telegram bot integration with polling",
+    "AI-powered responses via OpenRouter",
+    "REST API for conversation management",
+    "Hexagonal architecture with DDD principles",
+    "Dockerized deployment",
+    "Database migrations with Flyway",
+    "Interactive API documentation with Swagger"
+  ],
+  "publicApiSurface": [
+    "POST /auth/register - Register new user",
+    "POST /auth/login - Authenticate user",
+    "GET /api/conversations - List all conversations",
+    "GET /api/conversations/{id}/messages - Get messages by conversation",
+    "POST /api/conversations/{id}/messages - Send message to conversation",
+    "ProcessTelegramUpdateUseCase - Process incoming Telegram updates",
+    "RegisterUserUseCase - Register new users",
+    "AuthenticateUserUseCase - Authenticate users",
+    "SendMessageUseCase - Send messages to conversations",
+    "ListConversationsUseCase - List user conversations"
+  ]
+}
