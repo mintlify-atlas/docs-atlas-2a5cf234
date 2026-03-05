@@ -1,0 +1,308 @@
+---
+title: Environment Configuration
+description: Complete guide to configuring environment variables for the TelegramBot API
+icon: gear
+---
+
+# Environment Configuration
+
+The TelegramBot API uses environment variables for configuration. This guide covers all required and optional variables.
+
+## Getting Started
+
+<Steps>
+  <Step title="Create environment file">
+    Copy the `.env.example` file to `.env` in the project root:
+    
+    ```bash
+    cp .env.example .env
+    ```
+  </Step>
+  
+  <Step title="Configure required variables">
+    Open the `.env` file and fill in the required values as described below.
+  </Step>
+  
+  <Step title="Verify configuration">
+    Ensure all required variables are set before starting the application.
+  </Step>
+</Steps>
+
+## Required Variables
+
+These variables **must** be configured for the application to work properly.
+
+### Database Configuration
+
+<Accordion title="DB_USER">
+  **Type:** String  
+  **Default:** `postgres`  
+  **Description:** PostgreSQL database username.
+  
+  ```bash
+  DB_USER=postgres
+  ```
+  
+  <Info>The default value `postgres` typically works with standard PostgreSQL installations.</Info>
+</Accordion>
+
+<Accordion title="DB_PASSWORD">
+  **Type:** String  
+  **Required:** Yes  
+  **Description:** Password for the PostgreSQL database user.
+  
+  ```bash
+  DB_PASSWORD=secret_password
+  ```
+  
+  <Warning>Use a strong, unique password in production environments.</Warning>
+</Accordion>
+
+<Accordion title="DB_URL (Development Only)">
+  **Type:** JDBC URL  
+  **Required:** Only for local development without Docker  
+  **Description:** Full JDBC connection URL for PostgreSQL.
+  
+  ```bash
+  DB_URL=jdbc:postgresql://localhost:5432/telegrmdb
+  ```
+  
+  <Note>This variable is only needed when running locally without Docker. Docker Compose automatically sets this.</Note>
+</Accordion>
+
+### Telegram Configuration
+
+<Accordion title="TELEGRAM_BOT_TOKEN">
+  **Type:** String  
+  **Required:** Yes  
+  **Description:** Authentication token for your Telegram bot.
+  
+  ```bash
+  TELEGRAM_BOT_TOKEN=1234567890:ABCdefGHIjklMNOpqrsTUVwxyz
+  ```
+  
+  **How to obtain:**
+  1. Open Telegram and search for `@BotFather`
+  2. Send `/newbot` command
+  3. Follow the prompts to create your bot
+  4. Copy the token provided by BotFather
+  
+  See the [Telegram Setup Guide](/guides/telegram-setup) for detailed instructions.
+  
+  <Warning>Keep this token secret! Anyone with this token can control your bot.</Warning>
+</Accordion>
+
+### AI Configuration (OpenRouter)
+
+<Accordion title="OPENROUTE_KEY">
+  **Type:** String  
+  **Required:** Yes  
+  **Description:** API key for accessing AI models through OpenRouter.
+  
+  ```bash
+  OPENROUTE_KEY=sk-or-v1-abc123def456...
+  ```
+  
+  **How to obtain:**
+  1. Visit [OpenRouter.ai](https://openrouter.ai)
+  2. Create an account or sign in
+  3. Navigate to the "Keys" section
+  4. Generate a new API key
+  5. Copy the key to your `.env` file
+  
+  See the [AI Configuration Guide](/guides/ai-configuration) for more details.
+  
+  <Warning>This key provides access to paid AI services. Keep it secure and monitor usage.</Warning>
+</Accordion>
+
+### Security Configuration
+
+<Accordion title="JWT_SECRET">
+  **Type:** String  
+  **Required:** Yes  
+  **Description:** Secret key used to sign and verify JWT authentication tokens.
+  
+  ```bash
+  JWT_SECRET=un_secreto_muy_largo_y_seguro_para_firmar_tokens
+  ```
+  
+  **How to generate:**
+  
+  <CodeGroup>
+    ```bash OpenSSL
+    openssl rand -base64 32
+    ```
+    
+    ```bash Linux/Mac
+    head -c 32 /dev/urandom | base64
+    ```
+    
+    ```bash Node.js
+    node -e "console.log(require('crypto').randomBytes(32).toString('base64'))"
+    ```
+  </CodeGroup>
+  
+  <Warning>Use a strong, random value. Never commit this to version control!</Warning>
+  
+  <Info>The JWT token expires after 24 hours by default (configurable in `application.yaml`).</Info>
+</Accordion>
+
+## Optional Variables
+
+These variables have default values but can be customized for your use case.
+
+### AI Behavior Configuration
+
+<Accordion title="AI_SYSTEM_PROMPT">
+  **Type:** String  
+  **Default:** `"IA caótica en español sin lógica, patos espaciales, humor cambiante (no agresivo), sin ser útil."`  
+  **Description:** System prompt that defines the AI bot's personality and behavior.
+  
+  ```bash
+  AI_SYSTEM_PROMPT="Eres una IA demente..."
+  ```
+  
+  <Tip>Customize this to create different bot personalities. The prompt greatly influences response style.</Tip>
+</Accordion>
+
+<Accordion title="AI_TEMPERATURE">
+  **Type:** Float (0.0 - 2.0)  
+  **Default:** `1.2`  
+  **Description:** Controls AI response creativity and randomness.
+  
+  ```bash
+  AI_TEMPERATURE=1.4
+  ```
+  
+  **Guidelines:**
+  - `0.1 - 0.5`: Very predictable and conservative
+  - `0.6 - 1.0`: Balanced responses
+  - `1.1 - 1.5`: Creative and varied
+  - `1.6 - 2.0`: Highly random and chaotic
+  
+  <Info>Higher values produce more creative but less predictable responses.</Info>
+</Accordion>
+
+<Accordion title="AI_MAX_TOKENS">
+  **Type:** Integer  
+  **Default:** `150`  
+  **Description:** Maximum length of AI-generated responses.
+  
+  ```bash
+  AI_MAX_TOKENS=200
+  ```
+  
+  <Note>Higher values allow longer responses but consume more API credits.</Note>
+</Accordion>
+
+## Configuration File Reference
+
+### Complete .env.example
+
+```bash
+# --- Variables Requeridas ---
+
+# Base de Datos
+DB_USER=postgres
+DB_PASSWORD=secret_password
+
+# Telegram
+TELEGRAM_BOT_TOKEN=tu_token_de_telegram_aqui
+
+# IA (OpenRouter)
+OPENROUTE_KEY=tu_clave_de_openrouter_aqui
+AI_SYSTEM_PROMPT="Eres una IA demente..."
+AI_TEMPERATURE=1.4
+AI_MAX_TOKENS=200
+
+# Seguridad
+JWT_SECRET=un_secreto_muy_largo_y_seguro_para_firmar_tokens
+
+# --- Opcional para Desarrollo Local (sin Docker) se necesita una DB Postgresql ---
+# DB_URL=jdbc:postgresql://localhost:5432/telegrmdb
+```
+
+### Application Properties Mapping
+
+The environment variables map to Spring Boot application properties as follows:
+
+| Environment Variable | Application Property | Location |
+|---------------------|---------------------|----------|
+| `DB_USER` | `spring.datasource.username` | `application.yaml:8` |
+| `DB_PASSWORD` | `spring.datasource.password` | `application.yaml:9` |
+| `DB_URL` | `spring.datasource.url` | `application.yaml:7` |
+| `TELEGRAM_BOT_TOKEN` | `telegram.bot-token` | `application.yaml:24` |
+| `OPENROUTE_KEY` | `openrouter.api-key` | `application.yaml:27` |
+| `AI_SYSTEM_PROMPT` | `openrouter.system-prompt` | `application.yaml:30` |
+| `AI_TEMPERATURE` | `openrouter.temperature` | `application.yaml:31` |
+| `AI_MAX_TOKENS` | `openrouter.max-tokens` | `application.yaml:32` |
+| `JWT_SECRET` | `jwt.secret` | `application.yaml:35` |
+
+## Validation and Troubleshooting
+
+<Warning>
+  **Common Issues:**
+  
+  1. **Missing required variables**: The application will fail to start with a clear error message.
+  2. **Invalid JWT_SECRET**: Authentication will fail if the secret is too short or weak.
+  3. **Invalid TELEGRAM_BOT_TOKEN**: Bot polling will fail with 401 Unauthorized.
+  4. **Invalid OPENROUTE_KEY**: AI responses will return error messages.
+</Warning>
+
+### Verifying Configuration
+
+You can verify your configuration is loaded correctly by checking the application startup logs:
+
+```bash
+docker-compose up
+```
+
+Look for successful initialization messages for:
+- Database connection
+- Flyway migrations
+- Telegram bot polling
+- OpenRouter AI adapter
+
+<Tip>
+  Use `docker-compose logs -f` to follow logs in real-time and catch configuration errors early.
+</Tip>
+
+## Security Best Practices
+
+<Steps>
+  <Step title="Never commit .env file">
+    Ensure `.env` is in your `.gitignore` file.
+  </Step>
+  
+  <Step title="Use different secrets per environment">
+    Development, staging, and production should have unique `JWT_SECRET` values.
+  </Step>
+  
+  <Step title="Rotate secrets regularly">
+    Change `JWT_SECRET` and `OPENROUTE_KEY` periodically, especially after team changes.
+  </Step>
+  
+  <Step title="Use environment-specific .env files">
+    Consider using `.env.dev`, `.env.staging`, `.env.prod` for different environments.
+  </Step>
+</Steps>
+
+## Next Steps
+
+<CardGroup cols={2}>
+  <Card title="Telegram Setup" icon="telegram" href="/guides/telegram-setup">
+    Learn how to create and configure your Telegram bot
+  </Card>
+  
+  <Card title="AI Configuration" icon="brain" href="/guides/ai-configuration">
+    Configure AI behavior and model selection
+  </Card>
+  
+  <Card title="Development Guide" icon="code" href="/guides/development">
+    Set up your local development environment
+  </Card>
+  
+  <Card title="Authentication" icon="lock" href="/guides/authentication">
+    Understand the JWT authentication flow
+  </Card>
+</CardGroup>

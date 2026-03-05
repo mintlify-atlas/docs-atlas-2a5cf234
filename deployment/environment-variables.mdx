@@ -1,0 +1,468 @@
+---
+title: 'Environment Variables'
+description: 'Complete reference for configuring TelegrmBot API'
+icon: 'gear'
+---
+
+## Overview
+
+The TelegrmBot API uses environment variables for all configuration. This approach follows the [Twelve-Factor App](https://12factor.net/config) methodology, ensuring secure and flexible deployments across different environments.
+
+<Info>
+All environment variables are loaded from a `.env` file in the project root. The application reads this file automatically using Spring Boot's configuration import feature.
+</Info>
+
+## Quick Start
+
+Copy the example file and configure your values:
+
+```bash
+cp .env.example .env
+```
+
+Then edit `.env` with your actual credentials.
+
+<Warning>
+Never commit the `.env` file to version control. It's already included in `.gitignore` to prevent accidental exposure of secrets.
+</Warning>
+
+## Configuration Reference
+
+### Database Configuration
+
+PostgreSQL database connection settings.
+
+<ParamField path="DB_USER" type="string" required>
+  PostgreSQL username for database authentication.
+  
+  **Default:** `postgres`
+  
+  **Example:**
+  ```bash
+  DB_USER=postgres
+  ```
+  
+  <Note>
+  For production, create a dedicated user instead of using the default `postgres` superuser.
+  </Note>
+</ParamField>
+
+<ParamField path="DB_PASSWORD" type="string" required>
+  PostgreSQL password for database authentication.
+  
+  **Default:** None (must be set)
+  
+  **Example:**
+  ```bash
+  DB_PASSWORD=secure_p@ssw0rd_123
+  ```
+  
+  <Warning>
+  Use a strong password with at least 16 characters, including uppercase, lowercase, numbers, and special characters.
+  </Warning>
+</ParamField>
+
+<ParamField path="DB_URL" type="string" default="jdbc:postgresql://db:5432/telegrmdb">
+  JDBC connection URL for PostgreSQL database.
+  
+  **Default (Docker):** `jdbc:postgresql://db:5432/telegrmdb`
+  
+  **Default (Local):** Must be set manually
+  
+  **Examples:**
+  
+  <CodeGroup>
+  ```bash Docker Compose
+  # Not required - set automatically in docker-compose.yml
+  DB_URL=jdbc:postgresql://db:5432/telegrmdb
+  ```
+  
+  ```bash Local Development
+  DB_URL=jdbc:postgresql://localhost:5432/telegrmdb
+  ```
+  
+  ```bash External Database
+  DB_URL=jdbc:postgresql://production-db.example.com:5432/telegrmdb
+  ```
+  
+  ```bash With SSL
+  DB_URL=jdbc:postgresql://db.example.com:5432/telegrmdb?ssl=true&sslmode=require
+  ```
+  </CodeGroup>
+  
+  <Info>
+  When using Docker Compose, `db` resolves to the PostgreSQL container. For local development, use `localhost`.
+  </Info>
+</ParamField>
+
+### Telegram Configuration
+
+Telegram Bot API integration settings.
+
+<ParamField path="TELEGRAM_BOT_TOKEN" type="string" required>
+  Authentication token for your Telegram bot.
+  
+  **Default:** None (must be obtained from BotFather)
+  
+  **Example:**
+  ```bash
+  TELEGRAM_BOT_TOKEN=6234567890:AAHdqTcvCH1vGWJxfSeofSAs0K5PALDsaw
+  ```
+  
+  **How to obtain:**
+  1. Open Telegram and search for [@BotFather](https://t.me/botfather)
+  2. Send `/newbot` command
+  3. Follow instructions to create your bot
+  4. Copy the token provided by BotFather
+  
+  <Warning>
+  This token grants full access to your bot. Keep it secret and never expose it in public repositories or client-side code.
+  </Warning>
+</ParamField>
+
+### AI Configuration (OpenRouter)
+
+AI response generation using OpenRouter API.
+
+<ParamField path="OPENROUTE_KEY" type="string" required>
+  API key for OpenRouter service.
+  
+  **Default:** None (must be obtained from OpenRouter)
+  
+  **Example:**
+  ```bash
+  OPENROUTE_KEY=sk-or-v1-1234567890abcdef1234567890abcdef
+  ```
+  
+  **How to obtain:**
+  1. Visit [openrouter.ai](https://openrouter.ai)
+  2. Sign up or log in
+  3. Navigate to API Keys section
+  4. Generate a new API key
+  
+  <Note>
+  OpenRouter provides access to multiple AI models through a unified API. The application uses the `tngtech/deepseek-r1t2-chimera:free` model by default.
+  </Note>
+</ParamField>
+
+<ParamField path="AI_SYSTEM_PROMPT" type="string" default="IA caótica en español...">
+  System prompt that defines the AI's personality and behavior.
+  
+  **Default:** `"Eres una IA demente..."`
+  
+  **Example:**
+  ```bash
+  AI_SYSTEM_PROMPT="You are a helpful assistant that provides concise answers."
+  ```
+  
+  <Info>
+  The system prompt significantly affects AI responses. Customize it to match your bot's intended personality and use case.
+  </Info>
+</ParamField>
+
+<ParamField path="AI_TEMPERATURE" type="number" default="1.2">
+  Controls randomness in AI responses. Higher values (e.g., 1.4) produce more creative/random outputs, while lower values (e.g., 0.2) produce more focused/deterministic responses.
+  
+  **Default:** `1.4`
+  
+  **Range:** `0.0` to `2.0`
+  
+  **Examples:**
+  ```bash
+  # More creative and unpredictable
+  AI_TEMPERATURE=1.4
+  
+  # Balanced
+  AI_TEMPERATURE=1.0
+  
+  # More focused and deterministic
+  AI_TEMPERATURE=0.5
+  ```
+  
+  <Note>
+  A temperature of 1.0 is neutral. Values above 1.0 increase randomness, while values below 1.0 make responses more deterministic.
+  </Note>
+</ParamField>
+
+<ParamField path="AI_MAX_TOKENS" type="integer" default="150">
+  Maximum number of tokens (words/characters) in AI responses.
+  
+  **Default:** `200`
+  
+  **Range:** `1` to `4096` (model-dependent)
+  
+  **Examples:**
+  ```bash
+  # Short responses
+  AI_MAX_TOKENS=100
+  
+  # Medium responses (default)
+  AI_MAX_TOKENS=200
+  
+  # Long responses
+  AI_MAX_TOKENS=500
+  ```
+  
+  <Warning>
+  Higher token limits increase API costs and response times. The free tier may have stricter limits.
+  </Warning>
+</ParamField>
+
+### Security Configuration
+
+JWT token generation and authentication settings.
+
+<ParamField path="JWT_SECRET" type="string" required>
+  Secret key used to sign and verify JWT tokens.
+  
+  **Default:** None (must be generated)
+  
+  **Example:**
+  ```bash
+  JWT_SECRET=a1b2c3d4e5f6g7h8i9j0k1l2m3n4o5p6q7r8s9t0u1v2w3x4y5z6
+  ```
+  
+  **How to generate:**
+  
+  <CodeGroup>
+  ```bash OpenSSL
+  openssl rand -base64 32
+  ```
+  
+  ```bash Node.js
+  node -e "console.log(require('crypto').randomBytes(32).toString('hex'))"
+  ```
+  
+  ```bash Python
+  python3 -c "import secrets; print(secrets.token_hex(32))"
+  ```
+  </CodeGroup>
+  
+  <Warning>
+  **Critical Security Requirements:**
+  - Minimum 32 characters (64+ recommended)
+  - Use cryptographically secure random generation
+  - Never reuse secrets across environments
+  - Rotate regularly in production
+  - Changing this value will invalidate all existing tokens
+  </Warning>
+</ParamField>
+
+## Environment-Specific Configuration
+
+### Development Environment
+
+Recommended settings for local development:
+
+```bash
+# Database
+DB_USER=postgres
+DB_PASSWORD=dev_password
+DB_URL=jdbc:postgresql://localhost:5432/telegrmdb
+
+# Telegram (use test bot)
+TELEGRAM_BOT_TOKEN=your_test_bot_token
+
+# AI (more verbose for debugging)
+OPENROUTE_KEY=your_dev_key
+AI_SYSTEM_PROMPT="You are a test assistant."
+AI_TEMPERATURE=1.0
+AI_MAX_TOKENS=150
+
+# Security (less strict)
+JWT_SECRET=dev_secret_key_not_for_production
+```
+
+<Note>
+Use separate Telegram bots and API keys for development to avoid affecting production data and rate limits.
+</Note>
+
+### Production Environment
+
+Recommended settings for production:
+
+```bash
+# Database (external, managed service)
+DB_USER=app_user
+DB_PASSWORD=<strong-generated-password>
+DB_URL=jdbc:postgresql://prod-db.internal:5432/telegrmdb?ssl=true&sslmode=require
+
+# Telegram (production bot)
+TELEGRAM_BOT_TOKEN=<production-bot-token>
+
+# AI (optimized settings)
+OPENROUTE_KEY=<production-api-key>
+AI_SYSTEM_PROMPT="<production-prompt>"
+AI_TEMPERATURE=1.2
+AI_MAX_TOKENS=200
+
+# Security (strict)
+JWT_SECRET=<64-character-cryptographic-secret>
+```
+
+<Warning>
+**Production Security Checklist:**
+- Use managed database service with SSL
+- Store secrets in secure vault (AWS Secrets Manager, HashiCorp Vault)
+- Enable database connection pooling
+- Set up monitoring and alerting
+- Implement secret rotation
+- Use read replicas for scaling
+</Warning>
+
+### Docker Compose Environment
+
+When using Docker Compose, the `DB_URL` is automatically configured:
+
+```bash
+# .env file for Docker Compose
+DB_USER=postgres
+DB_PASSWORD=secure_password
+# DB_URL is set in docker-compose.yml, no need to specify here
+
+TELEGRAM_BOT_TOKEN=your_telegram_token
+OPENROUTE_KEY=your_openrouter_key
+AI_SYSTEM_PROMPT="Eres una IA demente..."
+AI_TEMPERATURE=1.4
+AI_MAX_TOKENS=200
+JWT_SECRET=your_jwt_secret_key
+```
+
+<Info>
+Docker Compose automatically sets `DB_URL=jdbc:postgresql://db:5432/telegrmdb` in the application container, connecting to the `db` service.
+</Info>
+
+## Configuration Validation
+
+### Required Variables Check
+
+Ensure all required variables are set before starting:
+
+```bash
+#!/bin/bash
+required_vars=("DB_USER" "DB_PASSWORD" "TELEGRAM_BOT_TOKEN" "OPENROUTE_KEY" "JWT_SECRET")
+
+for var in "${required_vars[@]}"; do
+  if [ -z "${!var}" ]; then
+    echo "Error: $var is not set"
+    exit 1
+  fi
+done
+
+echo "All required variables are set"
+```
+
+### Application Startup Validation
+
+Spring Boot will fail to start if required variables are missing:
+
+```
+Error creating bean with name 'dataSource':
+Could not resolve placeholder 'DB_PASSWORD' in value "${DB_PASSWORD}"
+```
+
+<Note>
+This fail-fast behavior prevents the application from starting with misconfigured settings.
+</Note>
+
+## Security Best Practices
+
+### Secret Management
+
+<Steps>
+  <Step title="Never commit secrets">
+    Ensure `.env` is in `.gitignore`:
+    ```bash
+    echo ".env" >> .gitignore
+    ```
+  </Step>
+  
+  <Step title="Use secret management tools">
+    For production, use:
+    - AWS Secrets Manager
+    - HashiCorp Vault
+    - Azure Key Vault
+    - Google Secret Manager
+  </Step>
+  
+  <Step title="Rotate secrets regularly">
+    Implement a secret rotation policy:
+    - JWT secrets: Every 90 days
+    - Database passwords: Every 180 days
+    - API keys: When compromised or annually
+  </Step>
+  
+  <Step title="Use environment-specific secrets">
+    Never reuse secrets across environments:
+    - Development: Separate test keys
+    - Staging: Isolated from production
+    - Production: Unique, strong secrets
+  </Step>
+</Steps>
+
+### Environment File Permissions
+
+Restrict access to the `.env` file:
+
+```bash
+chmod 600 .env
+chown app_user:app_group .env
+```
+
+### Audit and Monitoring
+
+1. **Enable audit logging for configuration changes**
+2. **Monitor for unauthorized access attempts**
+3. **Set up alerts for configuration errors**
+4. **Regular security reviews of environment configuration**
+
+## Troubleshooting
+
+### Variable Not Found
+
+**Error:**
+```
+Could not resolve placeholder 'TELEGRAM_BOT_TOKEN'
+```
+
+**Solution:**
+1. Verify variable name matches exactly (case-sensitive)
+2. Check `.env` file exists in project root
+3. Ensure no spaces around `=` sign
+4. Restart application after changes
+
+### Invalid Database URL
+
+**Error:**
+```
+Connection refused: jdbc:postgresql://localhost:5432/telegrmdb
+```
+
+**Solution:**
+1. Check PostgreSQL is running: `pg_isready`
+2. Verify port 5432 is accessible
+3. For Docker: Use `db` instead of `localhost`
+4. For local: Use `localhost` instead of `db`
+
+### JWT Token Issues
+
+**Error:**
+```
+Signature verification failed
+```
+
+**Solution:**
+1. Verify `JWT_SECRET` hasn't changed
+2. Clear existing tokens and re-authenticate
+3. Check secret length (minimum 32 characters)
+
+## Next Steps
+
+<CardGroup cols={2}>
+  <Card title="Docker Deployment" icon="docker" href="/deployment/docker">
+    Deploy with Docker Compose
+  </Card>
+  <Card title="Local Development" icon="laptop-code" href="/deployment/local-development">
+    Set up local development environment
+  </Card>
+</CardGroup>

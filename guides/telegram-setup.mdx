@@ -1,0 +1,367 @@
+---
+title: Telegram Bot Setup
+description: Step-by-step guide to creating and configuring your Telegram bot with BotFather
+icon: telegram
+---
+
+# Telegram Bot Setup
+
+This guide walks you through creating a Telegram bot using BotFather and integrating it with the TelegramBot API.
+
+## Overview
+
+Telegram bots are special accounts that don't require a phone number. They're controlled programmatically via the Telegram Bot API. BotFather is Telegram's official bot for creating and managing other bots.
+
+<Info>
+  The TelegramBot API uses **polling** to receive messages. The bot continuously checks for new messages from Telegram servers, implemented in `TelegramPollingService.java`.
+</Info>
+
+## Creating Your Bot
+
+<Steps>
+  <Step title="Open Telegram">
+    Launch the Telegram app on your device (mobile, desktop, or web).
+  </Step>
+  
+  <Step title="Find BotFather">
+    Search for `@BotFather` in the Telegram search bar and start a chat.
+    
+    <Tip>BotFather has a blue verification checkmark. Make sure you're talking to the official bot!</Tip>
+  </Step>
+  
+  <Step title="Create a new bot">
+    Send the `/newbot` command to BotFather.
+    
+    ```
+    /newbot
+    ```
+    
+    BotFather will respond and ask for a name for your bot.
+  </Step>
+  
+  <Step title="Choose a name">
+    Send your desired bot name. This is the display name users will see.
+    
+    ```
+    My Awesome Bot
+    ```
+    
+    <Note>This name can contain spaces and special characters.</Note>
+  </Step>
+  
+  <Step title="Choose a username">
+    BotFather will ask for a username. This must:
+    - End with `bot` (e.g., `myawesome_bot` or `MyAwesomeBot`)
+    - Be unique across all Telegram bots
+    - Contain only letters, numbers, and underscores
+    
+    ```
+    myawesome_bot
+    ```
+  </Step>
+  
+  <Step title="Get your token">
+    If the username is available, BotFather will create your bot and provide an **API token**:
+    
+    ```
+    Done! Congratulations on your new bot. You will find it at t.me/myawesome_bot.
+    
+    Use this token to access the HTTP API:
+    1234567890:ABCdefGHIjklMNOpqrsTUVwxyz
+    
+    Keep your token secure and store it safely, it can be used by anyone to control your bot.
+    ```
+    
+    <Warning>**CRITICAL**: Keep this token secret! Anyone with access to this token can control your bot.</Warning>
+  </Step>
+</Steps>
+
+## Configuring Your Bot
+
+### Adding the Token to Your Application
+
+Add your bot token to the `.env` file:
+
+```bash .env
+TELEGRAM_BOT_TOKEN=1234567890:ABCdefGHIjklMNOpqrsTUVwxyz
+```
+
+### Optional: Customize Bot Settings
+
+You can configure additional bot settings through BotFather:
+
+<Accordion title="Set Bot Description">
+  The description appears when users first interact with your bot.
+  
+  ```
+  /setdescription
+  ```
+  
+  Select your bot and send the description text.
+</Accordion>
+
+<Accordion title="Set About Text">
+  Short text shown in the bot's profile.
+  
+  ```
+  /setabouttext
+  ```
+</Accordion>
+
+<Accordion title="Set Bot Picture">
+  Upload a profile picture for your bot.
+  
+  ```
+  /setuserpic
+  ```
+  
+  Select your bot and upload an image.
+</Accordion>
+
+<Accordion title="Set Commands">
+  Define a list of commands that appear in the bot's menu.
+  
+  ```
+  /setcommands
+  ```
+  
+  Example command list:
+  ```
+  start - Start interacting with the bot
+  help - Show help information
+  settings - Configure bot settings
+  ```
+</Accordion>
+
+## Testing Your Bot
+
+<Steps>
+  <Step title="Start the application">
+    With your token configured in `.env`, start the application:
+    
+    ```bash
+    docker-compose up --build
+    ```
+  </Step>
+  
+  <Step title="Find your bot on Telegram">
+    Search for your bot's username (e.g., `@myawesome_bot`) in Telegram and start a chat.
+  </Step>
+  
+  <Step title="Send a message">
+    Send any message to your bot. You should receive an AI-generated response.
+    
+    <Info>The first response might take a few seconds as the AI processes your message.</Info>
+  </Step>
+  
+  <Step title="Check the logs">
+    Monitor your application logs to see message processing:
+    
+    ```bash
+    docker-compose logs -f
+    ```
+    
+    You should see log entries for:
+    - Received update from Telegram
+    - Processing message
+    - AI response generation
+    - Reply sent to Telegram
+  </Step>
+</Steps>
+
+## How Telegram Integration Works
+
+### Polling Architecture
+
+The application uses a polling mechanism to receive messages:
+
+```java src/main/java/com/acamus/telegrm/infrastructure/adapters/in/scheduler/TelegramPollingService.java
+@Scheduled(fixedDelay = 1000) // Polls every 1 second
+public void pollUpdates() {
+    // Fetch new updates from Telegram
+    // Process each update through the use case
+}
+```
+
+<Info>
+  **Polling vs Webhooks**: This implementation uses polling (regularly checking for updates) rather than webhooks (Telegram pushing updates). Polling is simpler to set up and doesn't require a public HTTPS endpoint.
+</Info>
+
+### Message Flow
+
+<Steps>
+  <Step title="User sends message">
+    A user sends a message to your bot on Telegram.
+  </Step>
+  
+  <Step title="Polling service fetches update">
+    `TelegramPollingService` receives the update via the Telegram Bot API.
+  </Step>
+  
+  <Step title="Update processing">
+    The update is passed to `ProcessTelegramUpdateUseCase` which:
+    - Extracts message content and chat information
+    - Finds or creates a conversation record
+    - Saves the user's message
+  </Step>
+  
+  <Step title="AI generation">
+    The AI adapter generates a response using OpenRouter.
+  </Step>
+  
+  <Step title="Reply sent">
+    The bot sends the AI-generated response back to the user via Telegram.
+  </Step>
+</Steps>
+
+## Telegram Configuration in Code
+
+The bot token is configured in the application through:
+
+### application.yaml
+
+```yaml application.yaml:23-24
+telegram:
+  bot-token: ${TELEGRAM_BOT_TOKEN}
+```
+
+### TelegramConfig
+
+```java src/main/java/com/acamus/telegrm/infrastructure/config/TelegramConfig.java
+@Configuration
+public class TelegramConfig {
+    @Value("${telegram.bot-token}")
+    private String botToken;
+    
+    @Bean
+    public RestClient telegramRestClient() {
+        return RestClient.builder()
+            .baseUrl("https://api.telegram.org/bot" + botToken)
+            .build();
+    }
+}
+```
+
+### TelegramAdapter
+
+The adapter handles all communication with Telegram's API:
+
+```java src/main/java/com/acamus/telegrm/infrastructure/adapters/out/telegram/TelegramAdapter.java
+public void sendMessage(TelegramChatId chatId, String text) {
+    // Sends messages to Telegram via REST API
+}
+
+public List<Update> getUpdates(Long offset) {
+    // Fetches new messages from Telegram
+}
+```
+
+## Troubleshooting
+
+<Accordion title="Bot not responding to messages">
+  **Possible causes:**
+  
+  1. **Invalid token**: Check your `TELEGRAM_BOT_TOKEN` in `.env`
+  2. **Application not running**: Ensure `docker-compose up` is active
+  3. **Polling service not started**: Check logs for scheduler initialization
+  4. **Network issues**: Verify your server can reach `api.telegram.org`
+  
+  **Solution:**
+  ```bash
+  # Check application logs
+  docker-compose logs -f
+  
+  # Verify token is loaded
+  docker-compose logs | grep "telegram.bot-token"
+  ```
+</Accordion>
+
+<Accordion title="401 Unauthorized error">
+  This means your bot token is invalid or has been revoked.
+  
+  **Solution:**
+  1. Generate a new token with BotFather using `/token`
+  2. Update your `.env` file
+  3. Restart the application: `docker-compose restart`
+</Accordion>
+
+<Accordion title="Messages received but no AI response">
+  The Telegram integration is working, but there's an issue with AI generation.
+  
+  **Check:**
+  - OpenRouter API key is valid ([AI Configuration](/guides/ai-configuration))
+  - AI service logs for error messages
+  - OpenRouter account has sufficient credits
+</Accordion>
+
+<Accordion title="Duplicate messages">
+  If you're receiving duplicate bot responses:
+  
+  **Possible causes:**
+  - Multiple application instances running
+  - Offset not being updated correctly in polling
+  
+  **Solution:**
+  ```bash
+  # Ensure only one instance is running
+  docker-compose down
+  docker-compose up --build
+  ```
+</Accordion>
+
+## Bot Management Commands
+
+Useful BotFather commands for managing your bot:
+
+| Command | Description |
+|---------|-------------|
+| `/mybots` | List all your bots and manage them |
+| `/token` | Generate a new token (revokes old one) |
+| `/revoke` | Revoke bot token |
+| `/setname` | Change bot name |
+| `/setdescription` | Change bot description |
+| `/setabouttext` | Change bot about text |
+| `/setuserpic` | Change bot profile picture |
+| `/setcommands` | Set bot command list |
+| `/deletebot` | Delete your bot |
+
+<Warning>
+  **Token Revocation**: If you use `/token` to generate a new token, the old token becomes invalid immediately. Update your `.env` file before restarting the application.
+</Warning>
+
+## Advanced Configuration
+
+### Adjusting Poll Frequency
+
+The default polling interval is 1 second. To adjust this, modify:
+
+```java src/main/java/com/acamus/telegrm/infrastructure/adapters/in/scheduler/TelegramPollingService.java
+@Scheduled(fixedDelay = 2000) // Poll every 2 seconds
+public void pollUpdates() {
+    // ...
+}
+```
+
+<Note>
+  Shorter intervals provide faster response times but increase API calls. Telegram has rate limits, so don't poll too frequently.
+</Note>
+
+## Next Steps
+
+<CardGroup cols={2}>
+  <Card title="AI Configuration" icon="brain" href="/guides/ai-configuration">
+    Configure AI responses and behavior
+  </Card>
+  
+  <Card title="Authentication" icon="lock" href="/guides/authentication">
+    Secure your REST API endpoints
+  </Card>
+  
+  <Card title="Environment Config" icon="gear" href="/guides/configuration">
+    Review all configuration options
+  </Card>
+  
+  <Card title="API Reference" icon="code" href="/api/conversations">
+    Explore available API endpoints
+  </Card>
+</CardGroup>

@@ -1,0 +1,281 @@
+---
+title: 'Conversations'
+description: 'Manage Telegram conversations and retrieve messages'
+icon: 'comments'
+---
+
+## Overview
+
+The Conversations API allows you to list all Telegram conversations initiated with the bot and retrieve messages from specific conversations.
+
+<Warning>
+  All conversation endpoints require authentication. Include a valid JWT token in the Authorization header.
+</Warning>
+
+## List All Conversations
+
+<CodeGroup>
+
+```bash cURL
+curl -X GET http://localhost:8080/api/conversations \
+  -H "Authorization: Bearer YOUR_JWT_TOKEN"
+```
+
+```java Java Controller
+@GetMapping
+public ResponseEntity<List<ConversationSummaryDto>> listConversations() {
+    List<Conversation> conversations = listConversationsPort.listAll();
+    List<ConversationSummaryDto> dtos = conversations.stream()
+            .map(this::toSummaryDto)
+            .toList();
+    return ResponseEntity.ok(dtos);
+}
+```
+
+</CodeGroup>
+
+Retrieves a summary list of all Telegram conversations initiated with the bot.
+
+### Endpoint
+
+```
+GET /api/conversations
+```
+
+### Headers
+
+<ParamField header="Authorization" type="string" required>
+  Bearer token for authentication
+  
+  ```
+  Authorization: Bearer <your-jwt-token>
+  ```
+</ParamField>
+
+### Response
+
+Returns an array of conversation summary objects.
+
+<ResponseField name="conversations" type="array">
+  <Expandable title="ConversationSummaryDto">
+    <ResponseField name="id" type="string">
+      Unique identifier for the conversation (Telegram chat ID)
+    </ResponseField>
+    
+    <ResponseField name="participantName" type="string">
+      Name of the Telegram user (username if available, otherwise first name)
+    </ResponseField>
+    
+    <ResponseField name="lastMessageAt" type="string">
+      Timestamp of the last message in ISO-8601 format
+      
+      Example: `2024-03-15T10:30:45`
+    </ResponseField>
+  </Expandable>
+</ResponseField>
+
+### Success Response (200 OK)
+
+```json
+[
+  {
+    "id": "123456789",
+    "participantName": "JohnDoe",
+    "lastMessageAt": "2024-03-15T10:30:45"
+  },
+  {
+    "id": "987654321",
+    "participantName": "Jane Smith",
+    "lastMessageAt": "2024-03-14T15:22:10"
+  }
+]
+```
+
+### Error Responses
+
+<AccordionGroup>
+  <Accordion title="401 Unauthorized - Missing or Invalid Token">
+    ```json
+    {
+      "message": "Authentication Failed",
+      "details": "JWT token is missing or invalid"
+    }
+    ```
+  </Accordion>
+</AccordionGroup>
+
+---
+
+## Get Conversation Messages
+
+<CodeGroup>
+
+```bash cURL
+curl -X GET http://localhost:8080/api/conversations/123456789/messages \
+  -H "Authorization: Bearer YOUR_JWT_TOKEN"
+```
+
+```java Java Controller
+@GetMapping("/{id}/messages")
+public ResponseEntity<List<MessageDto>> getMessages(@PathVariable String id) {
+    List<Message> messages = getMessagesByConversationPort.getMessages(id);
+    List<MessageDto> dtos = messages.stream()
+            .map(this::toMessageDto)
+            .toList();
+    return ResponseEntity.ok(dtos);
+}
+```
+
+</CodeGroup>
+
+Retrieves the complete list of messages for a specific conversation, ordered by date.
+
+### Endpoint
+
+```
+GET /api/conversations/{id}/messages
+```
+
+### Path Parameters
+
+<ParamField path="id" type="string" required>
+  The conversation ID (Telegram chat ID)
+  
+  Example: `123456789`
+</ParamField>
+
+### Headers
+
+<ParamField header="Authorization" type="string" required>
+  Bearer token for authentication
+  
+  ```
+  Authorization: Bearer <your-jwt-token>
+  ```
+</ParamField>
+
+### Response
+
+Returns an array of message objects ordered chronologically.
+
+<ResponseField name="messages" type="array">
+  <Expandable title="MessageDto">
+    <ResponseField name="id" type="string">
+      Unique identifier for the message (UUID format)
+    </ResponseField>
+    
+    <ResponseField name="content" type="string">
+      The text content of the message
+    </ResponseField>
+    
+    <ResponseField name="direction" type="string">
+      Message direction:
+      - `INCOMING`: Message received from Telegram user
+      - `OUTGOING`: Message sent by the bot or admin
+      
+      <Expandable title="MessageDirection Enum">
+        ```java
+        public enum MessageDirection {
+            INCOMING, OUTGOING
+        }
+        ```
+        
+        Source: `Message.java:48`
+      </Expandable>
+    </ResponseField>
+    
+    <ResponseField name="sentAt" type="string">
+      Timestamp when the message was sent (ISO-8601 format)
+      
+      Example: `2024-03-15T10:30:45`
+    </ResponseField>
+  </Expandable>
+</ResponseField>
+
+### Success Response (200 OK)
+
+```json
+[
+  {
+    "id": "a1b2c3d4-e5f6-7890-abcd-ef1234567890",
+    "content": "Hello! How can I help you?",
+    "direction": "INCOMING",
+    "sentAt": "2024-03-15T10:28:30"
+  },
+  {
+    "id": "b2c3d4e5-f6a7-8901-bcde-f12345678901",
+    "content": "This is a response from the AI bot",
+    "direction": "OUTGOING",
+    "sentAt": "2024-03-15T10:28:35"
+  },
+  {
+    "id": "c3d4e5f6-a7b8-9012-cdef-123456789012",
+    "content": "Thanks! That was helpful.",
+    "direction": "INCOMING",
+    "sentAt": "2024-03-15T10:30:45"
+  }
+]
+```
+
+### Error Responses
+
+<AccordionGroup>
+  <Accordion title="401 Unauthorized - Missing or Invalid Token">
+    ```json
+    {
+      "message": "Authentication Failed",
+      "details": "JWT token is missing or invalid"
+    }
+    ```
+  </Accordion>
+
+  <Accordion title="404 Not Found - Conversation Not Found">
+    ```json
+    {
+      "message": "Resource Not Found",
+      "details": "Conversation with ID '123456789' could not be found."
+    }
+    ```
+  </Accordion>
+</AccordionGroup>
+
+## Message Direction Flow
+
+Understanding message directions:
+
+<Steps>
+  <Step title="INCOMING Messages">
+    Messages sent by Telegram users to the bot. These trigger the AI response system.
+  </Step>
+  
+  <Step title="OUTGOING Messages">
+    Messages sent from the bot to Telegram users. Can be:
+    - AI-generated responses (automatic)
+    - Admin-initiated messages (via API)
+  </Step>
+</Steps>
+
+## Pagination
+
+<Note>
+  The current API version does not implement pagination. All messages for a conversation are returned in a single response. This may be added in future versions for conversations with large message histories.
+</Note>
+
+## Source Code References
+
+- **Controller**: `ConversationController.java:44` (list conversations), `ConversationController.java:58` (get messages)
+- **DTOs**:
+  - `ConversationSummaryDto.java:5` - Conversation summary structure
+  - `MessageDto.java:6` - Message structure
+- **Domain Model**: `Message.java:48` - MessageDirection enum
+
+## Next Steps
+
+<CardGroup cols={2}>
+  <Card title="Send Messages" icon="paper-plane" href="/api/messages">
+    Learn how to send messages to conversations
+  </Card>
+  <Card title="Authentication" icon="key" href="/api/authentication">
+    Review authentication requirements
+  </Card>
+</CardGroup>

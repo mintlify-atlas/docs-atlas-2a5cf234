@@ -1,0 +1,750 @@
+---
+title: Development Guide
+description: Set up your local development environment, run tests, and understand the codebase structure
+icon: code
+---
+
+# Development Guide
+
+This guide helps you set up a local development environment for the TelegramBot API project and understand its architecture and development workflows.
+
+## Prerequisites
+
+Before starting, ensure you have the following installed:
+
+<Steps>
+  <Step title="Java Development Kit (JDK)">
+    **Version:** JDK 21 or higher
+    
+    <CodeGroup>
+    ```bash Check version
+    java -version
+    ```
+    
+    ```bash Download (SDKMAN)
+    sdk install java 21.0.1-open
+    ```
+    </CodeGroup>
+    
+    <Info>The project uses Java 21 features. Earlier versions won't work.</Info>
+  </Step>
+  
+  <Step title="Maven">
+    **Version:** Maven 3.9 or higher
+    
+    <CodeGroup>
+    ```bash Check version
+    mvn -version
+    ```
+    
+    ```bash Ubuntu/Debian
+    sudo apt install maven
+    ```
+    
+    ```bash macOS
+    brew install maven
+    ```
+    </CodeGroup>
+    
+    <Note>Maven wrapper (`mvnw`) is included in the project, so local Maven installation is optional.</Note>
+  </Step>
+  
+  <Step title="Docker & Docker Compose">
+    Required for running the PostgreSQL database and full application stack.
+    
+    <CodeGroup>
+    ```bash Check Docker
+    docker --version
+    docker compose version
+    ```
+    
+    ```bash Install Docker Desktop
+    # Download from https://www.docker.com/products/docker-desktop/
+    ```
+    </CodeGroup>
+  </Step>
+  
+  <Step title="IDE (Optional but Recommended)">
+    **Recommended:** IntelliJ IDEA (Community or Ultimate)
+    
+    Alternatives: Eclipse, VS Code with Java extensions
+  </Step>
+</Steps>
+
+## Project Setup
+
+### Clone the Repository
+
+```bash
+git clone https://github.com/acamus79/TlgrmBot.git
+cd TlgrmBot
+```
+
+### Configure Environment Variables
+
+<Steps>
+  <Step title="Copy environment template">
+    ```bash
+    cp .env.example .env
+    ```
+  </Step>
+  
+  <Step title="Edit .env file">
+    Open `.env` and configure the required variables:
+    
+    ```bash .env
+    # Database
+    DB_USER=postgres
+    DB_PASSWORD=your_password
+    
+    # Telegram Bot
+    TELEGRAM_BOT_TOKEN=your_telegram_token
+    
+    # OpenRouter AI
+    OPENROUTE_KEY=your_openrouter_key
+    
+    # JWT Security
+    JWT_SECRET=$(openssl rand -base64 32)
+    
+    # Optional: AI Configuration
+    AI_SYSTEM_PROMPT="Your custom prompt"
+    AI_TEMPERATURE=1.2
+    AI_MAX_TOKENS=150
+    ```
+    
+    See the [Configuration Guide](/guides/configuration) for detailed instructions.
+  </Step>
+</Steps>
+
+## Running the Application
+
+### Option 1: Docker Compose (Recommended)
+
+The easiest way to run the complete stack:
+
+```bash
+# Build and start all services
+docker-compose up --build
+
+# Run in detached mode
+docker-compose up -d
+
+# View logs
+docker-compose logs -f
+
+# Stop all services
+docker-compose down
+```
+
+The application will be available at:
+- **API**: http://localhost:8080
+- **Swagger UI**: http://localhost:8080/swagger-ui.html
+
+<Info>
+  Docker Compose automatically sets up:
+  - PostgreSQL database container
+  - Application container with all dependencies
+  - Network configuration
+  - Volume persistence for database data
+</Info>
+
+### Option 2: Local Development (Without Docker)
+
+For active development with faster rebuild times:
+
+<Steps>
+  <Step title="Start PostgreSQL">
+    You need a local PostgreSQL instance:
+    
+    <CodeGroup>
+    ```bash Docker
+    docker run -d \
+      --name telegrmdb \
+      -e POSTGRES_USER=postgres \
+      -e POSTGRES_PASSWORD=secret_password \
+      -e POSTGRES_DB=telegrmdb \
+      -p 5432:5432 \
+      postgres:15
+    ```
+    
+    ```bash Native
+    # Ubuntu/Debian
+    sudo apt install postgresql
+    sudo systemctl start postgresql
+    
+    # macOS
+    brew install postgresql
+    brew services start postgresql
+    ```
+    </CodeGroup>
+  </Step>
+  
+  <Step title="Configure database URL">
+    Add to your `.env`:
+    
+    ```bash
+    DB_URL=jdbc:postgresql://localhost:5432/telegrmdb
+    ```
+  </Step>
+  
+  <Step title="Build the project">
+    ```bash
+    mvn clean install
+    ```
+    
+    Or using the wrapper:
+    ```bash
+    ./mvnw clean install
+    ```
+  </Step>
+  
+  <Step title="Run the application">
+    <CodeGroup>
+    ```bash Maven
+    mvn spring-boot:run
+    ```
+    
+    ```bash Maven Wrapper
+    ./mvnw spring-boot:run
+    ```
+    
+    ```bash JAR
+    java -jar target/telegrm-0.0.1-SNAPSHOT.jar
+    ```
+    </CodeGroup>
+  </Step>
+</Steps>
+
+<Tip>
+  **Hot Reload**: Spring Boot DevTools is included in `pom.xml:55-58`. Changes to classes will trigger automatic restart.
+</Tip>
+
+## Running Tests
+
+The project includes comprehensive unit and integration tests.
+
+### Run All Tests
+
+```bash
+mvn clean verify
+```
+
+Or with the wrapper:
+```bash
+./mvnw clean verify
+```
+
+<Info>
+  **Testcontainers**: Integration tests use Testcontainers to spin up a PostgreSQL instance automatically. Docker must be running.
+</Info>
+
+### Run Specific Test Classes
+
+```bash
+# Run a specific test class
+mvn test -Dtest=RegisterUserUseCaseTest
+
+# Run tests matching a pattern
+mvn test -Dtest=*UseCaseTest
+```
+
+### Test Structure
+
+The test suite includes:
+
+<Accordion title="Unit Tests">
+  Located in `src/test/java/com/acamus/telegrm/application/usecases/`
+  
+  - `RegisterUserUseCaseTest` - User registration logic
+  - `ProcessTelegramUpdateUseCaseTest` - Telegram message processing
+  - `SendMessageUseCaseTest` - Message sending logic
+  
+  **Characteristics:**
+  - Fast execution
+  - No external dependencies
+  - Uses Mockito for mocking
+</Accordion>
+
+<Accordion title="Integration Tests">
+  Located in `src/test/java/com/acamus/telegrm/infrastructure/adapters/`
+  
+  - `ConversationRepositoryAdapterTest` - Database operations
+  - `TelegrmApplicationTests` - Full application context
+  
+  **Characteristics:**
+  - Tests real database interactions
+  - Uses Testcontainers for PostgreSQL
+  - Extends `BaseIntegrationTest`
+</Accordion>
+
+### Base Integration Test
+
+```java src/test/java/com/acamus/telegrm/BaseIntegrationTest.java
+@SpringBootTest
+@Testcontainers
+public abstract class BaseIntegrationTest {
+    @Container
+    static PostgreSQLContainer<?> postgres = new PostgreSQLContainer<>("postgres:15")
+            .withDatabaseName("testdb")
+            .withUsername("test")
+            .withPassword("test");
+    
+    // Configuration for tests
+}
+```
+
+<Note>
+  Integration tests take longer to run because they start a real PostgreSQL container.
+</Note>
+
+## Project Structure
+
+The project follows **Hexagonal Architecture** (Ports and Adapters):
+
+```
+src/main/java/com/acamus/telegrm/
+├── core/                           # Domain Layer (Business Logic)
+│   ├── domain/
+│   │   ├── model/                  # Domain Entities
+│   │   │   ├── User.java
+│   │   │   ├── Conversation.java
+│   │   │   ├── Message.java
+│   │   │   └── TelegramChat.java
+│   │   ├── valueobjects/           # Value Objects
+│   │   │   ├── Email.java
+│   │   │   ├── Password.java
+│   │   │   ├── MessageContent.java
+│   │   │   └── TelegramChatId.java
+│   │   └── exception/              # Domain Exceptions
+│   │       ├── EmailAlreadyExistsException.java
+│   │       └── InvalidCredentialsException.java
+│   └── ports/                      # Port Interfaces
+│       ├── in/                     # Input Ports (Use Cases)
+│       │   ├── user/
+│       │   │   ├── RegisterUserPort.java
+│       │   │   ├── AuthenticateUserPort.java
+│       │   │   └── *Command.java
+│       │   ├── conversation/
+│       │   │   ├── SendMessagePort.java
+│       │   │   ├── ListConversationsPort.java
+│       │   │   └── GetMessagesByConversationPort.java
+│       │   └── telegram/
+│       │       └── ProcessTelegramUpdatePort.java
+│       └── out/                    # Output Ports (Dependencies)
+│           ├── user/
+│           │   └── UserRepositoryPort.java
+│           ├── conversation/
+│           │   ├── ConversationRepositoryPort.java
+│           │   └── MessageRepositoryPort.java
+│           ├── ai/
+│           │   └── AiGeneratorPort.java
+│           ├── telegram/
+│           │   └── TelegramPort.java
+│           └── security/
+│               └── TokenGeneratorPort.java
+│
+├── application/                    # Application Layer (Use Cases)
+│   └── usecases/
+│       ├── user/
+│       │   ├── RegisterUserUseCase.java
+│       │   └── AuthenticateUserUseCase.java
+│       ├── conversation/
+│       │   ├── SendMessageUseCase.java
+│       │   ├── ListConversationsUseCase.java
+│       │   └── GetMessagesByConversationUseCase.java
+│       └── telegram/
+│           └── ProcessTelegramUpdateUseCase.java
+│
+├── infrastructure/                 # Infrastructure Layer (Adapters)
+│   ├── adapters/
+│   │   ├── in/                     # Input Adapters
+│   │   │   ├── web/                # REST Controllers
+│   │   │   │   ├── auth/
+│   │   │   │   │   └── AuthController.java
+│   │   │   │   └── conversation/
+│   │   │   │       └── ConversationController.java
+│   │   │   └── scheduler/
+│   │   │       └── TelegramPollingService.java
+│   │   └── out/                    # Output Adapters
+│   │       ├── persistence/        # Database
+│   │       │   ├── jpa/
+│   │       │   │   ├── entities/
+│   │       │   │   └── repositories/
+│   │       │   ├── UserRepositoryAdapter.java
+│   │       │   ├── ConversationRepositoryAdapter.java
+│   │       │   └── MessageRepositoryAdapter.java
+│   │       ├── telegram/           # Telegram API
+│   │       │   └── TelegramAdapter.java
+│   │       ├── ai/                 # OpenRouter AI
+│   │       │   └── OpenRouterAdapter.java
+│   │       └── security/           # JWT & Password
+│   │           ├── JwtTokenProvider.java
+│   │           ├── PasswordHasher.java
+│   │           └── CustomUserDetailsService.java
+│   ├── config/                     # Spring Configuration
+│   │   ├── BeanConfiguration.java
+│   │   ├── SecurityConfig.java
+│   │   ├── JwtAuthenticationFilter.java
+│   │   ├── OpenRouterConfig.java
+│   │   ├── TelegramConfig.java
+│   │   └── OpenApiConfig.java
+│   ├── decorators/                 # Transaction Management
+│   │   ├── TransactionalSendMessageUseCase.java
+│   │   └── TransactionalProcessTelegramUpdateUseCase.java
+│   └── exceptions/                 # Global Exception Handling
+│       └── GlobalExceptionHandler.java
+│
+└── TelegrmApplication.java         # Main Application Class
+```
+
+### Key Architectural Principles
+
+<Accordion title="Domain Independence">
+  The `core/` package contains pure business logic with **no framework dependencies**.
+  
+  - No Spring annotations in domain code
+  - No JPA entities in the domain
+  - Domain defines interfaces (ports), infrastructure implements them
+  
+  <Info>This makes the domain easy to test and completely portable.</Info>
+</Accordion>
+
+<Accordion title="Dependency Rule">
+  Dependencies flow **inward**:
+  
+  ```
+  Infrastructure → Application → Domain
+  ```
+  
+  - Domain depends on nothing
+  - Application depends on domain
+  - Infrastructure depends on both
+</Accordion>
+
+<Accordion title="Ports and Adapters">
+  - **Ports**: Interfaces defined in the domain
+  - **Adapters**: Implementations in infrastructure
+  
+  Example:
+  ```java
+  // Port (in core/ports/out/)
+  public interface AiGeneratorPort {
+      String generateResponse(String input);
+  }
+  
+  // Adapter (in infrastructure/adapters/out/ai/)
+  @Component
+  public class OpenRouterAdapter implements AiGeneratorPort {
+      // Implementation using OpenRouter API
+  }
+  ```
+</Accordion>
+
+## Database Migrations
+
+The project uses **Flyway** for database version control.
+
+### Migration Files
+
+Located in `src/main/resources/db/migration/`:
+
+```
+db/migration/
+├── V1__create_users_table.sql
+├── V2__create_conversations_table.sql
+└── V3__create_messages_table.sql
+```
+
+### Creating a New Migration
+
+<Steps>
+  <Step title="Create migration file">
+    Follow the naming convention: `V{version}__{description}.sql`
+    
+    ```bash
+    touch src/main/resources/db/migration/V4__add_user_roles.sql
+    ```
+  </Step>
+  
+  <Step title="Write SQL">
+    ```sql V4__add_user_roles.sql
+    ALTER TABLE users ADD COLUMN role VARCHAR(50) DEFAULT 'USER';
+    CREATE INDEX idx_users_role ON users(role);
+    ```
+  </Step>
+  
+  <Step title="Restart application">
+    Flyway automatically applies pending migrations on startup.
+    
+    ```bash
+    docker-compose restart
+    ```
+  </Step>
+</Steps>
+
+<Warning>
+  **Never modify existing migration files** after they've been applied. Always create a new migration for changes.
+</Warning>
+
+## Adding New Features
+
+Follow the hexagonal architecture pattern:
+
+<Steps>
+  <Step title="Define domain model">
+    Add entities and value objects in `core/domain/model/`
+    
+    ```java
+    public class Feature {
+        private final String id;
+        private final String name;
+        // Domain logic here
+    }
+    ```
+  </Step>
+  
+  <Step title="Create ports">
+    Define input port (use case interface) in `core/ports/in/`:
+    
+    ```java
+    public interface CreateFeaturePort {
+        Feature create(CreateFeatureCommand command);
+    }
+    ```
+    
+    Define output port (dependency interface) in `core/ports/out/`:
+    
+    ```java
+    public interface FeatureRepositoryPort {
+        Feature save(Feature feature);
+        Optional<Feature> findById(String id);
+    }
+    ```
+  </Step>
+  
+  <Step title="Implement use case">
+    Create use case in `application/usecases/`:
+    
+    ```java
+    public class CreateFeatureUseCase implements CreateFeaturePort {
+        private final FeatureRepositoryPort repository;
+        
+        @Override
+        public Feature create(CreateFeatureCommand command) {
+            // Business logic
+            return repository.save(feature);
+        }
+    }
+    ```
+  </Step>
+  
+  <Step title="Implement adapters">
+    **Input adapter** (REST controller):
+    
+    ```java
+    @RestController
+    @RequestMapping("/features")
+    public class FeatureController {
+        private final CreateFeaturePort createFeaturePort;
+        
+        @PostMapping
+        public ResponseEntity<FeatureDto> create(@RequestBody CreateFeatureRequest request) {
+            Feature feature = createFeaturePort.create(new CreateFeatureCommand(request.name()));
+            return ResponseEntity.ok(toDto(feature));
+        }
+    }
+    ```
+    
+    **Output adapter** (repository):
+    
+    ```java
+    @Component
+    public class FeatureRepositoryAdapter implements FeatureRepositoryPort {
+        private final FeatureJpaRepository jpaRepository;
+        
+        @Override
+        public Feature save(Feature feature) {
+            FeatureEntity entity = toEntity(feature);
+            FeatureEntity saved = jpaRepository.save(entity);
+            return toDomain(saved);
+        }
+    }
+    ```
+  </Step>
+  
+  <Step title="Configure beans">
+    Wire everything in `BeanConfiguration.java`:
+    
+    ```java
+    @Bean
+    public CreateFeaturePort createFeatureUseCase(FeatureRepositoryPort repository) {
+        return new CreateFeatureUseCase(repository);
+    }
+    ```
+  </Step>
+  
+  <Step title="Write tests">
+    Unit test for use case:
+    
+    ```java
+    class CreateFeatureUseCaseTest {
+        @Test
+        void shouldCreateFeature() {
+            // Arrange
+            FeatureRepositoryPort repository = mock(FeatureRepositoryPort.class);
+            CreateFeatureUseCase useCase = new CreateFeatureUseCase(repository);
+            
+            // Act
+            Feature result = useCase.create(new CreateFeatureCommand("New Feature"));
+            
+            // Assert
+            verify(repository).save(any(Feature.class));
+        }
+    }
+    ```
+  </Step>
+</Steps>
+
+## Development Tools
+
+### Swagger UI
+
+Interactive API documentation at:
+
+**http://localhost:8080/swagger-ui.html**
+
+<Info>
+  Configure API documentation in `OpenApiConfig.java`. All controllers are automatically documented using OpenAPI annotations.
+</Info>
+
+### Bruno Collection
+
+A pre-configured Bruno collection is included in the project:
+
+```bash
+# Open in Bruno
+open Bruno/
+```
+
+Alternatively, import via the Bruno button in the README.
+
+<Tip>
+  Bruno is a Git-friendly alternative to Postman, perfect for team collaboration.
+</Tip>
+
+### Database Tools
+
+<Accordion title="Connect to PostgreSQL">
+  **Docker:**
+  ```bash
+  docker exec -it $(docker ps -qf "name=postgres") psql -U postgres -d telegrmdb
+  ```
+  
+  **GUI Tools:**
+  - **DBeaver**: Universal database client
+  - **pgAdmin**: PostgreSQL-specific
+  - **IntelliJ Database Tools**: Built into IntelliJ IDEA Ultimate
+  
+  **Connection Details:**
+  - Host: `localhost`
+  - Port: `5432`
+  - Database: `telegrmdb`
+  - User: `postgres`
+  - Password: (from your `.env`)
+</Accordion>
+
+## Troubleshooting
+
+<Accordion title="Port 8080 already in use">
+  Another application is using port 8080.
+  
+  **Solution:**
+  ```bash
+  # Find process using port 8080
+  lsof -i :8080
+  
+  # Kill the process
+  kill -9 <PID>
+  
+  # Or change the port in application.yaml
+  server:
+    port: 8081
+  ```
+</Accordion>
+
+<Accordion title="Database migration failed">
+  Flyway detected a checksum mismatch or failed migration.
+  
+  **Solution:**
+  ```bash
+  # Reset database
+  docker-compose down -v
+  docker-compose up --build
+  ```
+  
+  <Warning>This deletes all data. Use only in development.</Warning>
+</Accordion>
+
+<Accordion title="Tests failing with 'No Docker environment found'">
+  Testcontainers requires Docker to be running.
+  
+  **Solution:**
+  ```bash
+  # Start Docker Desktop or Docker daemon
+  # Then run tests again
+  mvn test
+  ```
+</Accordion>
+
+<Accordion title="'Cannot resolve symbol' in IDE">
+  IDE hasn't recognized Lombok-generated code.
+  
+  **Solution (IntelliJ):**
+  1. Install Lombok plugin
+  2. Enable annotation processing:
+     - Settings → Build → Compiler → Annotation Processors
+     - Check "Enable annotation processing"
+  3. Rebuild project
+</Accordion>
+
+## Useful Commands
+
+```bash
+# Clean build
+mvn clean install -DskipTests
+
+# Run with specific profile
+mvn spring-boot:run -Dspring-boot.run.profiles=dev
+
+# Generate JAR without running tests
+mvn package -DskipTests
+
+# Check for dependency updates
+mvn versions:display-dependency-updates
+
+# Format code (if configured)
+mvn spotless:apply
+
+# View dependency tree
+mvn dependency:tree
+```
+
+## Next Steps
+
+<CardGroup cols={2}>
+  <Card title="Architecture Deep Dive" icon="building" href="/architecture/overview">
+    Learn more about hexagonal architecture
+  </Card>
+  
+  <Card title="API Reference" icon="book" href="/api/overview">
+    Explore all available endpoints
+  </Card>
+  
+  <Card title="Configuration" icon="gear" href="/guides/configuration">
+    Review all configuration options
+  </Card>
+  
+  <Card title="Authentication" icon="lock" href="/guides/authentication">
+    Understand the JWT authentication flow
+  </Card>
+</CardGroup>

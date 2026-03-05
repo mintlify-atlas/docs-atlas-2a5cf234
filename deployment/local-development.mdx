@@ -1,0 +1,780 @@
+---
+title: 'Local Development'
+description: 'Set up and run TelegrmBot API locally without Docker'
+icon: 'laptop-code'
+---
+
+## Overview
+
+This guide covers running the TelegrmBot API directly on your local machine without Docker. This setup is ideal for:
+
+- Active development with fast iteration
+- Debugging with IDE integration
+- Testing changes without rebuilding Docker images
+- Learning the codebase architecture
+
+<Info>
+While Docker provides environment consistency, local development offers faster feedback loops and better debugging capabilities.
+</Info>
+
+## Prerequisites
+
+Ensure you have the following installed:
+
+### Required Software
+
+<CardGroup cols={2}>
+  <Card title="Java Development Kit" icon="java">
+    **Version:** JDK 21 (Eclipse Temurin recommended)
+    
+    **Verify:**
+    ```bash
+    java -version
+    # Should show: openjdk version "21.x.x"
+    ```
+    
+    **Download:** [Adoptium](https://adoptium.net/temurin/releases/?version=21)
+  </Card>
+  
+  <Card title="Apache Maven" icon="box">
+    **Version:** Maven 3.9+
+    
+    **Verify:**
+    ```bash
+    mvn -version
+    # Should show: Apache Maven 3.9.x
+    ```
+    
+    **Download:** [maven.apache.org](https://maven.apache.org/download.cgi)
+  </Card>
+  
+  <Card title="PostgreSQL" icon="database">
+    **Version:** PostgreSQL 15+
+    
+    **Verify:**
+    ```bash
+    psql --version
+    # Should show: psql (PostgreSQL) 15.x
+    ```
+    
+    **Download:** [postgresql.org](https://www.postgresql.org/download/)
+  </Card>
+  
+  <Card title="Git" icon="git">
+    **Version:** Any recent version
+    
+    **Verify:**
+    ```bash
+    git --version
+    ```
+    
+    **Download:** [git-scm.com](https://git-scm.com/downloads)
+  </Card>
+</CardGroup>
+
+### Optional Tools
+
+- **IntelliJ IDEA** (recommended) or Eclipse/VS Code
+- **pgAdmin** or **DBeaver** for database management
+- **Postman** or **Insomnia** for API testing
+
+## Database Setup
+
+### Install PostgreSQL
+
+<Tabs>
+  <Tab title="macOS">
+    Using Homebrew:
+    ```bash
+    brew install postgresql@15
+    brew services start postgresql@15
+    ```
+  </Tab>
+  
+  <Tab title="Ubuntu/Debian">
+    ```bash
+    sudo apt update
+    sudo apt install postgresql-15 postgresql-contrib
+    sudo systemctl start postgresql
+    sudo systemctl enable postgresql
+    ```
+  </Tab>
+  
+  <Tab title="Windows">
+    1. Download installer from [postgresql.org](https://www.postgresql.org/download/windows/)
+    2. Run installer and follow wizard
+    3. Set password for `postgres` user
+    4. Ensure PostgreSQL service is running
+  </Tab>
+</Tabs>
+
+### Create Database
+
+<Steps>
+  <Step title="Connect to PostgreSQL">
+    ```bash
+    psql -U postgres
+    ```
+    
+    Enter the password you set during PostgreSQL installation.
+  </Step>
+  
+  <Step title="Create the database">
+    ```sql
+    CREATE DATABASE telegrmdb;
+    ```
+  </Step>
+  
+  <Step title="Create application user (optional but recommended)">
+    ```sql
+    CREATE USER telegrm_user WITH PASSWORD 'dev_password';
+    GRANT ALL PRIVILEGES ON DATABASE telegrmdb TO telegrm_user;
+    ```
+    
+    <Note>
+    For development, using a dedicated user is good practice. For simplicity, you can also use the `postgres` superuser.
+    </Note>
+  </Step>
+  
+  <Step title="Verify database creation">
+    ```sql
+    \l
+    ```
+    
+    You should see `telegrmdb` in the list of databases.
+    
+    Exit psql:
+    ```sql
+    \q
+    ```
+  </Step>
+</Steps>
+
+### Configure Database Connection
+
+Test the connection:
+
+```bash
+psql -U postgres -d telegrmdb -c "SELECT version();"
+```
+
+<Info>
+If you created a dedicated user, test with:
+```bash
+psql -U telegrm_user -d telegrmdb -c "SELECT version();"
+```
+</Info>
+
+## Project Setup
+
+### Clone Repository
+
+```bash
+git clone <repository-url>
+cd telegrm
+```
+
+### Configure Environment Variables
+
+<Steps>
+  <Step title="Copy example environment file">
+    ```bash
+    cp .env.example .env
+    ```
+  </Step>
+  
+  <Step title="Edit environment variables">
+    Open `.env` and configure for local development:
+    
+    ```bash
+    # Database - Local PostgreSQL
+    DB_USER=postgres
+    DB_PASSWORD=your_postgres_password
+    DB_URL=jdbc:postgresql://localhost:5432/telegrmdb
+    
+    # Telegram Bot
+    TELEGRAM_BOT_TOKEN=your_telegram_bot_token
+    
+    # AI (OpenRouter)
+    OPENROUTE_KEY=your_openrouter_api_key
+    AI_SYSTEM_PROMPT="Eres una IA demente..."
+    AI_TEMPERATURE=1.4
+    AI_MAX_TOKENS=200
+    
+    # Security
+    JWT_SECRET=your_development_jwt_secret_key
+    ```
+    
+    <Warning>
+    The `DB_URL` must use `localhost` for local development, not `db` (which is for Docker).
+    </Warning>
+  </Step>
+</Steps>
+
+### Verify Configuration
+
+Ensure Spring Boot can read the `.env` file. The `application.yaml` includes:
+
+```yaml
+spring:
+  config:
+    import: "optional:file:.env[.properties]"
+```
+
+This automatically loads environment variables from `.env` on startup.
+
+## Build and Run
+
+### Maven Build
+
+<Steps>
+  <Step title="Clean and compile">
+    ```bash
+    mvn clean compile
+    ```
+    
+    This downloads dependencies and compiles the source code.
+  </Step>
+  
+  <Step title="Run tests (optional)">
+    ```bash
+    mvn test
+    ```
+    
+    <Note>
+    Tests use Testcontainers, which requires Docker. If Docker isn't available, skip tests with `-DskipTests`.
+    </Note>
+  </Step>
+  
+  <Step title="Package application">
+    ```bash
+    mvn clean package -DskipTests
+    ```
+    
+    This creates an executable JAR in `target/telegrm-0.0.1-SNAPSHOT.jar`.
+  </Step>
+</Steps>
+
+### Run Application
+
+<Tabs>
+  <Tab title="Maven Spring Boot Plugin">
+    **Recommended for development** - Supports hot reload:
+    
+    ```bash
+    mvn spring-boot:run
+    ```
+    
+    <Info>
+    This method enables Spring Boot DevTools for automatic restarts when code changes.
+    </Info>
+  </Tab>
+  
+  <Tab title="Java JAR">
+    Run the packaged JAR directly:
+    
+    ```bash
+    java -jar target/telegrm-0.0.1-SNAPSHOT.jar
+    ```
+    
+    With custom JVM options:
+    ```bash
+    java -Xmx512m -Xms256m -jar target/telegrm-0.0.1-SNAPSHOT.jar
+    ```
+  </Tab>
+  
+  <Tab title="With Profile">
+    Run with a specific Spring profile:
+    
+    ```bash
+    mvn spring-boot:run -Dspring-boot.run.profiles=dev
+    ```
+    
+    Or with JAR:
+    ```bash
+    java -jar target/telegrm-0.0.1-SNAPSHOT.jar --spring.profiles.active=dev
+    ```
+  </Tab>
+</Tabs>
+
+### Verify Application Started
+
+Successful startup shows:
+
+```
+  .   ____          _            __ _ _
+ /\\ / ___'_ __ _ _(_)_ __  __ _ \ \ \ \
+( ( )\___ | '_ | '_| | '_ \/ _` | \ \ \ \
+ \\/  ___)| |_)| | | | | || (_| |  ) ) ) )
+  '  |____| .__|_| |_|_| |_\__, | / / / /
+ =========|_|==============|___/=/_/_/_/
+ :: Spring Boot ::               (v3.5.10)
+
+INFO : Starting TelegrmApplication
+INFO : Flyway successfully migrated database
+INFO : Started TelegrmApplication in 3.542 seconds
+```
+
+Test the application:
+
+```bash
+curl http://localhost:8080/actuator/health
+```
+
+Expected response:
+```json
+{"status":"UP"}
+```
+
+<Note>
+The Telegram bot will automatically start polling for messages. Send a message to your bot to test the integration.
+</Note>
+
+## IDE Setup
+
+### IntelliJ IDEA
+
+<Steps>
+  <Step title="Import project">
+    1. Open IntelliJ IDEA
+    2. Select **File → Open**
+    3. Navigate to project directory and select `pom.xml`
+    4. Choose **Open as Project**
+    5. IntelliJ will automatically import Maven dependencies
+  </Step>
+  
+  <Step title="Configure JDK">
+    1. Go to **File → Project Structure → Project**
+    2. Set **SDK** to **Java 21**
+    3. Set **Language level** to **21**
+  </Step>
+  
+  <Step title="Enable annotation processing">
+    Required for Lombok:
+    
+    1. Go to **Settings → Build, Execution, Deployment → Compiler → Annotation Processors**
+    2. Check **Enable annotation processing**
+    3. Click **Apply**
+  </Step>
+  
+  <Step title="Install Lombok plugin">
+    1. Go to **Settings → Plugins**
+    2. Search for **Lombok**
+    3. Install and restart IntelliJ
+  </Step>
+  
+  <Step title="Create run configuration">
+    1. Click **Run → Edit Configurations**
+    2. Click **+** and select **Spring Boot**
+    3. Name: `TelegrmApplication`
+    4. Main class: `com.acamus.telegrm.TelegrmApplication`
+    5. Environment variables: Load from `.env` or set manually
+    6. Click **OK**
+  </Step>
+  
+  <Step title="Run application">
+    Click the green play button or press **Shift + F10**
+  </Step>
+</Steps>
+
+<Info>
+**IntelliJ IDEA Ultimate** includes advanced Spring Boot support with:
+- Spring Boot dashboard
+- Endpoint mappings view
+- Database tools
+- HTTP client
+</Info>
+
+### VS Code
+
+<Steps>
+  <Step title="Install extensions">
+    Install the following extensions:
+    - **Extension Pack for Java** (Microsoft)
+    - **Spring Boot Extension Pack** (VMware)
+    - **Lombok Annotations Support**
+  </Step>
+  
+  <Step title="Open project">
+    ```bash
+    code .
+    ```
+    
+    VS Code will detect the Maven project and import it.
+  </Step>
+  
+  <Step title="Configure environment">
+    Create `.vscode/launch.json`:
+    
+    ```json
+    {
+      "version": "0.2.0",
+      "configurations": [
+        {
+          "type": "java",
+          "name": "Spring Boot-TelegrmApplication",
+          "request": "launch",
+          "cwd": "${workspaceFolder}",
+          "mainClass": "com.acamus.telegrm.TelegrmApplication",
+          "projectName": "telegrm",
+          "args": "",
+          "envFile": "${workspaceFolder}/.env"
+        }
+      ]
+    }
+    ```
+  </Step>
+  
+  <Step title="Run application">
+    Press **F5** or click **Run → Start Debugging**
+  </Step>
+</Steps>
+
+### Eclipse
+
+<Steps>
+  <Step title="Import Maven project">
+    1. **File → Import → Maven → Existing Maven Projects**
+    2. Browse to project directory
+    3. Select `pom.xml`
+    4. Click **Finish**
+  </Step>
+  
+  <Step title="Configure JDK">
+    1. Right-click project → **Properties**
+    2. **Java Build Path → Libraries**
+    3. Ensure JDK 21 is configured
+  </Step>
+  
+  <Step title="Install Lombok">
+    1. Download `lombok.jar` from [projectlombok.org](https://projectlombok.org/download)
+    2. Run: `java -jar lombok.jar`
+    3. Install into Eclipse
+    4. Restart Eclipse
+  </Step>
+  
+  <Step title="Run as Spring Boot App">
+    Right-click project → **Run As → Spring Boot App**
+  </Step>
+</Steps>
+
+## Development Workflow
+
+### Hot Reload with Spring Boot DevTools
+
+The project includes Spring Boot DevTools for automatic restarts:
+
+```xml
+<dependency>
+    <groupId>org.springframework.boot</groupId>
+    <artifactId>spring-boot-devtools</artifactId>
+    <scope>runtime</scope>
+    <optional>true</optional>
+</dependency>
+```
+
+**How it works:**
+1. Make code changes
+2. Save files (or build in IDE)
+3. Application automatically restarts
+
+<Info>
+DevTools only restarts the application context, not the JVM, making restarts much faster than full restarts.
+</Info>
+
+### Database Migrations
+
+The project uses Flyway for database migrations. Migration scripts are in:
+
+```
+src/main/resources/db/migration/
+```
+
+**Running migrations:**
+
+Migrations run automatically on application startup. To run manually:
+
+```bash
+mvn flyway:migrate
+```
+
+**Creating new migrations:**
+
+1. Create a new SQL file following the naming convention:
+   ```
+   V{version}__{description}.sql
+   ```
+   
+   Example: `V003__add_user_roles_table.sql`
+
+2. Place in `src/main/resources/db/migration/`
+
+3. Restart application - Flyway will apply the migration
+
+<Warning>
+Never modify existing migration files after they've been applied. Create new migrations instead.
+</Warning>
+
+### Testing
+
+<CodeGroup>
+```bash Run All Tests
+mvn test
+```
+
+```bash Run Specific Test Class
+mvn test -Dtest=UserServiceTest
+```
+
+```bash Run with Coverage
+mvn test jacoco:report
+```
+
+```bash Skip Tests
+mvn clean package -DskipTests
+```
+</CodeGroup>
+
+<Note>
+Integration tests use Testcontainers, which requires Docker. Ensure Docker is running when executing tests.
+</Note>
+
+### Debugging
+
+<Tabs>
+  <Tab title="IntelliJ IDEA">
+    1. Set breakpoints by clicking left margin
+    2. Click debug icon (bug) or press **Shift + F9**
+    3. Use debug controls to step through code
+  </Tab>
+  
+  <Tab title="VS Code">
+    1. Set breakpoints by clicking left margin
+    2. Press **F5** to start debugging
+    3. Use debug toolbar to step through code
+  </Tab>
+  
+  <Tab title="Remote Debug">
+    Start application with debug port:
+    
+    ```bash
+    java -agentlib:jdwp=transport=dt_socket,server=y,suspend=n,address=*:5005 \
+         -jar target/telegrm-0.0.1-SNAPSHOT.jar
+    ```
+    
+    Then connect your IDE to `localhost:5005`
+  </Tab>
+</Tabs>
+
+## Accessing the Application
+
+### API Endpoints
+
+<CardGroup cols={2}>
+  <Card title="Swagger UI" icon="book">
+    **URL:** [http://localhost:8080/swagger-ui.html](http://localhost:8080/swagger-ui.html)
+    
+    Interactive API documentation and testing interface
+  </Card>
+  
+  <Card title="OpenAPI Spec" icon="file-code">
+    **URL:** [http://localhost:8080/v3/api-docs](http://localhost:8080/v3/api-docs)
+    
+    Raw OpenAPI 3.0 specification in JSON format
+  </Card>
+  
+  <Card title="Health Check" icon="heart-pulse">
+    **URL:** [http://localhost:8080/actuator/health](http://localhost:8080/actuator/health)
+    
+    Application health status
+  </Card>
+  
+  <Card title="Metrics" icon="chart-line">
+    **URL:** [http://localhost:8080/actuator/metrics](http://localhost:8080/actuator/metrics)
+    
+    Application metrics and monitoring data
+  </Card>
+</CardGroup>
+
+### Database Access
+
+Connect to PostgreSQL:
+
+```bash
+psql -U postgres -d telegrmdb
+```
+
+Common queries:
+
+<CodeGroup>
+```sql List Tables
+\dt
+```
+
+```sql Describe Table
+\d users
+```
+
+```sql View Migration History
+SELECT * FROM flyway_schema_history;
+```
+
+```sql Check Data
+SELECT * FROM users LIMIT 10;
+```
+</CodeGroup>
+
+## Troubleshooting
+
+### Port Already in Use
+
+**Error:**
+```
+Web server failed to start. Port 8080 was already in use.
+```
+
+**Solutions:**
+
+<Tabs>
+  <Tab title="Find and Kill Process">
+    ```bash
+    # Find process using port 8080
+    lsof -ti:8080
+    
+    # Kill the process
+    kill -9 $(lsof -ti:8080)
+    ```
+  </Tab>
+  
+  <Tab title="Use Different Port">
+    Add to `.env`:
+    ```bash
+    SERVER_PORT=8081
+    ```
+    
+    Or run with:
+    ```bash
+    mvn spring-boot:run -Dspring-boot.run.arguments="--server.port=8081"
+    ```
+  </Tab>
+</Tabs>
+
+### Database Connection Failed
+
+**Error:**
+```
+Connection to localhost:5432 refused
+```
+
+**Solutions:**
+
+<Steps>
+  <Step title="Verify PostgreSQL is running">
+    ```bash
+    pg_isready -h localhost -p 5432
+    ```
+  </Step>
+  
+  <Step title="Start PostgreSQL service">
+    <CodeGroup>
+    ```bash macOS
+    brew services start postgresql@15
+    ```
+    
+    ```bash Linux
+    sudo systemctl start postgresql
+    ```
+    
+    ```bash Windows
+    # Use Windows Services or:
+    net start postgresql-x64-15
+    ```
+    </CodeGroup>
+  </Step>
+  
+  <Step title="Check database exists">
+    ```bash
+    psql -U postgres -l | grep telegrmdb
+    ```
+  </Step>
+  
+  <Step title="Verify credentials in .env">
+    Ensure `DB_USER`, `DB_PASSWORD`, and `DB_URL` are correct
+  </Step>
+</Steps>
+
+### Lombok Not Working
+
+**Error:**
+```
+Cannot resolve symbol 'log'
+Cannot resolve method 'builder'
+```
+
+**Solution:**
+
+1. Ensure Lombok plugin is installed in IDE
+2. Enable annotation processing (IntelliJ/Eclipse)
+3. Rebuild project: `mvn clean compile`
+4. Restart IDE
+
+### Maven Dependency Issues
+
+**Error:**
+```
+Could not resolve dependencies
+```
+
+**Solutions:**
+
+```bash
+# Clear Maven cache and re-download
+mvn dependency:purge-local-repository
+
+# Force update
+mvn clean install -U
+
+# Check for conflicts
+mvn dependency:tree
+```
+
+### Flyway Migration Failed
+
+**Error:**
+```
+Flyway migration failed: SQL statement invalid
+```
+
+**Solutions:**
+
+1. **Check migration syntax** in SQL files
+2. **Clean database** (development only):
+   ```bash
+   mvn flyway:clean
+   mvn flyway:migrate
+   ```
+3. **Manual repair**:
+   ```bash
+   mvn flyway:repair
+   ```
+
+<Warning>
+`flyway:clean` drops all database objects. Never use in production!
+</Warning>
+
+## Next Steps
+
+<CardGroup cols={2}>
+  <Card title="Architecture Guide" icon="diagram-project" href="/architecture/overview">
+    Understand the hexagonal architecture
+  </Card>
+  <Card title="API Reference" icon="code" href="/api/overview">
+    Explore available endpoints
+  </Card>
+  <Card title="Docker Deployment" icon="docker" href="/deployment/docker">
+    Deploy with containers
+  </Card>
+  <Card title="Development Guide" icon="code" href="/guides/development">
+    Learn about the development workflow
+  </Card>
+</CardGroup>

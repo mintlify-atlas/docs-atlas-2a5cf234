@@ -1,0 +1,456 @@
+---
+title: 'Docker Deployment'
+description: 'Deploy TelegrmBot API using Docker and Docker Compose'
+icon: 'docker'
+---
+
+## Overview
+
+The TelegrmBot API uses a multi-stage Docker build process with Docker Compose for orchestrating the application and PostgreSQL database. This approach ensures consistent deployments across all environments.
+
+## Prerequisites
+
+Before deploying with Docker, ensure you have:
+
+- Docker Engine 20.10 or higher
+- Docker Compose V2
+- At least 2GB of available RAM
+- Telegram Bot Token from [@BotFather](https://t.me/botfather)
+- OpenRouter API Key from [openrouter.ai](https://openrouter.ai)
+
+## Docker Architecture
+
+### Multi-Stage Build
+
+The Dockerfile uses a two-stage build process for optimal image size and security:
+
+```dockerfile
+# Stage 1: Build with Maven
+FROM maven:3.9.6-eclipse-temurin-21-alpine AS build
+WORKDIR /app
+COPY pom.xml .
+COPY src ./src
+RUN mvn clean package -DskipTests
+
+# Stage 2: Runtime with JRE
+FROM eclipse-temurin:21-jre-alpine
+WORKDIR /app
+COPY --from=build /app/target/*.jar app.jar
+
+# Non-root user for security
+RUN addgroup -S spring && adduser -S spring -G spring
+USER spring:spring
+
+ENTRYPOINT ["java", "-jar", "app.jar"]
+```
+
+<Info>
+The build stage uses Maven 3.9.6 with JDK 21, while the runtime stage only includes JRE 21, reducing the final image size by ~300MB.
+</Info>
+
+### Docker Compose Services
+
+The `docker-compose.yml` defines two services:
+
+1. **db** - PostgreSQL 15 database with health checks
+2. **app** - Spring Boot application that depends on the database
+
+```yaml
+services:
+  db:
+    image: postgres:15-alpine
+    container_name: telegrm-db
+    environment:
+      POSTGRES_DB: telegrmdb
+      POSTGRES_USER: ${DB_USER}
+      POSTGRES_PASSWORD: ${DB_PASSWORD}
+    ports:
+      - "5432:5432"
+    volumes:
+      - postgres_data:/var/lib/postgresql/data
+    healthcheck:
+      test: ["CMD-SHELL", "pg_isready -U ${DB_USER} -d telegrmdb"]
+      interval: 5s
+      timeout: 5s
+      retries: 5
+
+  app:
+    build: .
+    container_name: telegrm-api
+    depends_on:
+      db:
+        condition: service_healthy
+    ports:
+      - "8080:8080"
+```
+
+<Note>
+The app service waits for the database health check to pass before starting, preventing connection errors during initialization.
+</Note>
+
+## Deployment Steps
+
+<Steps>
+  <Step title="Clone the repository">
+    Clone the project and navigate to the source directory:
+    
+    ```bash
+    git clone <repository-url>
+    cd telegrm
+    ```
+  </Step>
+
+  <Step title="Configure environment variables">
+    Copy the example environment file and configure your variables:
+    
+    ```bash
+    cp .env.example .env
+    ```
+    
+    Edit the `.env` file with your actual credentials:
+    
+    ```bash
+    # Required configurations
+    DB_USER=postgres
+    DB_PASSWORD=your_secure_password
+    TELEGRAM_BOT_TOKEN=your_telegram_bot_token
+    OPENROUTE_KEY=your_openrouter_api_key
+    JWT_SECRET=your_long_and_secure_jwt_secret_key
+    ```
+    
+    <Warning>
+    Never commit the `.env` file to version control. It contains sensitive credentials.
+    </Warning>
+  </Step>
+
+  <Step title="Build and start containers">
+    Use Docker Compose to build the application image and start all services:
+    
+    ```bash
+    docker-compose up -d --build
+    ```
+    
+    This command will:
+    - Build the Spring Boot application using Maven
+    - Create the Docker image with JRE 21
+    - Start the PostgreSQL database
+    - Wait for database health check
+    - Start the application container
+    
+    <Info>
+    The `--build` flag forces a rebuild of the application image. Omit it for faster startups if no code changes were made.
+    </Info>
+  </Step>
+
+  <Step title="Verify deployment">
+    Check that both containers are running:
+    
+    ```bash
+    docker-compose ps
+    ```
+    
+    Expected output:
+    ```
+    NAME            IMAGE              STATUS         PORTS
+    telegrm-api     telegrm-app        Up 30 seconds  0.0.0.0:8080->8080/tcp
+    telegrm-db      postgres:15-alpine Up 35 seconds  0.0.0.0:5432->5432/tcp
+    ```
+  </Step>
+
+  <Step title="Test the API">
+    Access the Swagger UI to verify the API is responding:
+    
+    ```bash
+    curl http://localhost:8080/swagger-ui.html
+    ```
+    
+    Or open in your browser: [http://localhost:8080/swagger-ui.html](http://localhost:8080/swagger-ui.html)
+  </Step>
+</Steps>
+
+## Managing Containers
+
+### Viewing Logs
+
+View logs from both services:
+
+<CodeGroup>
+```bash Application Logs
+docker-compose logs app -f
+```
+
+```bash Database Logs
+docker-compose logs db -f
+```
+
+```bash All Services
+docker-compose logs -f
+```
+
+```bash Last 100 Lines
+docker-compose logs --tail=100
+```
+</CodeGroup>
+
+### Stopping Containers
+
+<CodeGroup>
+```bash Stop All Services
+docker-compose stop
+```
+
+```bash Stop Specific Service
+docker-compose stop app
+```
+
+```bash Stop and Remove Containers
+docker-compose down
+```
+
+```bash Stop and Remove with Volumes
+docker-compose down -v
+```
+</CodeGroup>
+
+<Warning>
+Using `docker-compose down -v` will delete the PostgreSQL data volume, resulting in complete data loss. Only use this for development resets.
+</Warning>
+
+### Restarting Services
+
+<CodeGroup>
+```bash Restart All Services
+docker-compose restart
+```
+
+```bash Restart App Only
+docker-compose restart app
+```
+
+```bash Rebuild and Restart
+docker-compose up -d --build --force-recreate
+```
+</CodeGroup>
+
+## Health Checks
+
+### Database Health Check
+
+The PostgreSQL container includes a built-in health check:
+
+```bash
+docker inspect telegrm-db --format='{{.State.Health.Status}}'
+```
+
+Possible statuses: `starting`, `healthy`, `unhealthy`
+
+### Application Health Check
+
+Spring Boot Actuator provides health endpoints:
+
+```bash
+curl http://localhost:8080/actuator/health
+```
+
+Expected response:
+```json
+{
+  "status": "UP"
+}
+```
+
+### Manual Container Inspection
+
+Access the application container shell:
+
+```bash
+docker exec -it telegrm-api sh
+```
+
+Access the database container:
+
+```bash
+docker exec -it telegrm-db psql -U postgres -d telegrmdb
+```
+
+## Troubleshooting
+
+### Container Won't Start
+
+<Steps>
+  <Step title="Check container logs">
+    ```bash
+    docker-compose logs app
+    ```
+  </Step>
+
+  <Step title="Verify environment variables">
+    ```bash
+    docker-compose config
+    ```
+  </Step>
+
+  <Step title="Check port availability">
+    ```bash
+    lsof -i :8080
+    lsof -i :5432
+    ```
+  </Step>
+</Steps>
+
+### Database Connection Issues
+
+<Note>
+If the app can't connect to the database, ensure the database health check passed:
+
+```bash
+docker-compose ps
+```
+
+The `db` service should show `healthy` status.
+</Note>
+
+Common fixes:
+
+1. **Restart the database service:**
+   ```bash
+   docker-compose restart db
+   ```
+
+2. **Check database logs for errors:**
+   ```bash
+   docker-compose logs db | grep ERROR
+   ```
+
+3. **Verify database credentials in `.env`**
+
+### Application Build Fails
+
+If Maven build fails during Docker image creation:
+
+1. **Check Maven output:**
+   ```bash
+   docker-compose build --no-cache app
+   ```
+
+2. **Test build locally:**
+   ```bash
+   mvn clean package
+   ```
+
+3. **Clear Docker build cache:**
+   ```bash
+   docker builder prune
+   ```
+
+### Out of Memory Errors
+
+Increase Docker memory limits in Docker Desktop settings or use:
+
+```bash
+docker-compose up -d --build --memory="2g"
+```
+
+## Production Considerations
+
+### Security Hardening
+
+<Warning>
+For production deployments, implement these security measures:
+</Warning>
+
+1. **Use Docker secrets instead of environment variables:**
+   ```yaml
+   secrets:
+     db_password:
+       external: true
+   ```
+
+2. **Limit container resources:**
+   ```yaml
+   deploy:
+     resources:
+       limits:
+         cpus: '1'
+         memory: 1G
+   ```
+
+3. **Run behind a reverse proxy (Nginx/Traefik)**
+
+4. **Enable HTTPS with SSL certificates**
+
+5. **Use read-only filesystem where possible**
+
+### Database Backups
+
+Create automated backups:
+
+```bash
+# Manual backup
+docker exec telegrm-db pg_dump -U postgres telegrmdb > backup_$(date +%Y%m%d).sql
+
+# Restore from backup
+cat backup_20240315.sql | docker exec -i telegrm-db psql -U postgres telegrmdb
+```
+
+### Monitoring and Logging
+
+1. **Configure centralized logging** (ELK, Splunk, etc.)
+2. **Set up container monitoring** (Prometheus, Grafana)
+3. **Enable Spring Boot Actuator metrics:**
+   ```bash
+   curl http://localhost:8080/actuator/metrics
+   ```
+
+## Advanced Configuration
+
+### Custom Network Configuration
+
+Create a custom Docker network:
+
+```yaml
+networks:
+  telegrm-network:
+    driver: bridge
+
+services:
+  app:
+    networks:
+      - telegrm-network
+  db:
+    networks:
+      - telegrm-network
+```
+
+### External Database
+
+To use an external PostgreSQL instance instead of the Docker database:
+
+1. Remove the `db` service from `docker-compose.yml`
+2. Update the `DB_URL` in `.env`:
+   ```
+   DB_URL=jdbc:postgresql://external-db-host:5432/telegrmdb
+   ```
+
+### Multiple Environments
+
+Create environment-specific compose files:
+
+```bash
+# Development
+docker-compose -f docker-compose.yml -f docker-compose.dev.yml up
+
+# Production
+docker-compose -f docker-compose.yml -f docker-compose.prod.yml up
+```
+
+## Next Steps
+
+<CardGroup cols={2}>
+  <Card title="Environment Variables" icon="gear" href="/deployment/environment-variables">
+    Complete reference of all configuration options
+  </Card>
+  <Card title="Local Development" icon="laptop-code" href="/deployment/local-development">
+    Run the application without Docker for development
+  </Card>
+</CardGroup>

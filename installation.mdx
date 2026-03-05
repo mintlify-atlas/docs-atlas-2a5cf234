@@ -1,0 +1,833 @@
+---
+title: Installation
+description: Detailed installation and setup guide for TelegrmBot API
+---
+
+# Installation Guide
+
+This guide covers everything you need to install and run TelegrmBot API in both production (Docker) and development (local) environments.
+
+## Prerequisites
+
+### Required Software
+
+<Steps>
+  <Step title="Java Development Kit 21">
+    TelegrmBot API requires **JDK 21 or higher**.
+    
+    **Verify installation:**
+    ```bash
+    java -version
+    ```
+    
+    Expected output:
+    ```
+    openjdk version "21.0.x"
+    ```
+    
+    **Installation:**
+    
+    <CodeGroup>
+    ```bash Ubuntu/Debian
+    sudo apt update
+    sudo apt install openjdk-21-jdk
+    ```
+    
+    ```bash macOS (Homebrew)
+    brew install openjdk@21
+    ```
+    
+    ```bash Windows (Chocolatey)
+    choco install openjdk21
+    ```
+    </CodeGroup>
+    
+    <Tip>
+    We recommend using **Eclipse Temurin** (formerly AdoptOpenJDK) for best compatibility.
+    </Tip>
+  </Step>
+  
+  <Step title="Apache Maven 3.9+">
+    Maven is used for dependency management and building the application.
+    
+    **Verify installation:**
+    ```bash
+    mvn -version
+    ```
+    
+    Expected output:
+    ```
+    Apache Maven 3.9.x
+    ```
+    
+    **Installation:**
+    
+    <CodeGroup>
+    ```bash Ubuntu/Debian
+    sudo apt update
+    sudo apt install maven
+    ```
+    
+    ```bash macOS (Homebrew)
+    brew install maven
+    ```
+    
+    ```bash Windows (Chocolatey)
+    choco install maven
+    ```
+    </CodeGroup>
+  </Step>
+  
+  <Step title="Docker & Docker Compose">
+    Required for containerized deployment (recommended) and integration tests.
+    
+    **Verify installation:**
+    ```bash
+    docker --version
+    docker-compose --version
+    ```
+    
+    **Installation:**
+    
+    - **Linux**: Follow [Docker's official installation guide](https://docs.docker.com/engine/install/)
+    - **macOS**: Install [Docker Desktop for Mac](https://docs.docker.com/desktop/install/mac-install/)
+    - **Windows**: Install [Docker Desktop for Windows](https://docs.docker.com/desktop/install/windows-install/)
+    
+    <Warning>
+    Ensure Docker Desktop is running before executing Docker commands.
+    </Warning>
+  </Step>
+  
+  <Step title="PostgreSQL 15+ (for local development)">
+    Only needed if running the application locally without Docker.
+    
+    **Verify installation:**
+    ```bash
+    psql --version
+    ```
+    
+    **Installation:**
+    
+    <CodeGroup>
+    ```bash Ubuntu/Debian
+    sudo apt update
+    sudo apt install postgresql-15 postgresql-contrib
+    sudo systemctl start postgresql
+    ```
+    
+    ```bash macOS (Homebrew)
+    brew install postgresql@15
+    brew services start postgresql@15
+    ```
+    
+    ```bash Windows
+    # Download installer from:
+    # https://www.postgresql.org/download/windows/
+    ```
+    </CodeGroup>
+  </Step>
+</Steps>
+
+### Optional Tools
+
+| Tool | Purpose | Installation |
+|------|---------|-------------|
+| **IntelliJ IDEA** | Recommended IDE | [Download Community Edition](https://www.jetbrains.com/idea/download/) |
+| **Postman/Bruno** | API testing | [Bruno](https://www.usebruno.com/) or [Postman](https://www.postman.com/) |
+| **Git** | Version control | `apt install git` / `brew install git` |
+
+<Info>
+The project includes a Bruno collection for API testing. Bruno is an open-source alternative to Postman with Git-friendly storage.
+</Info>
+
+## Installation Methods
+
+Choose the installation method that fits your needs:
+
+<CardGroup cols={2}>
+  <Card title="Docker (Recommended)" icon="docker">
+    **Best for:** Production deployment, quick testing, consistent environments
+    
+    **Pros:**
+    - Zero configuration
+    - Automatic database setup
+    - Isolated environment
+    - Fast deployment
+  </Card>
+  
+  <Card title="Local Development" icon="code">
+    **Best for:** Active development, debugging, IDE integration
+    
+    **Pros:**
+    - Hot reload support
+    - Full debugging capabilities
+    - Direct database access
+    - Faster iteration
+  </Card>
+</CardGroup>
+
+## Method 1: Docker Installation (Recommended)
+
+### Step 1: Clone the Repository
+
+```bash
+git clone https://github.com/acamus79/TlgrmBot.git
+cd TlgrmBot
+```
+
+### Step 2: Configure Environment
+
+Create a `.env` file from the example:
+
+```bash
+cp .env.example .env
+```
+
+Edit `.env` with your configuration:
+
+```bash .env
+# Database Configuration
+DB_USER=postgres
+DB_PASSWORD=your_secure_password
+
+# Telegram Bot Configuration
+TELEGRAM_BOT_TOKEN=your_bot_token_from_botfather
+
+# OpenRouter AI Configuration
+OPENROUTE_KEY=your_openrouter_api_key
+AI_SYSTEM_PROMPT="You are a helpful AI assistant that responds in a friendly manner."
+AI_TEMPERATURE=1.0
+AI_MAX_TOKENS=200
+
+# JWT Security
+JWT_SECRET=generate_with_openssl_rand_base64_32
+```
+
+<Warning>
+**Security Best Practices:**
+- Use strong, unique passwords for `DB_PASSWORD`
+- Generate `JWT_SECRET` with: `openssl rand -base64 32`
+- Never commit `.env` to version control
+- Rotate secrets regularly in production
+</Warning>
+
+### Step 3: Review Docker Configuration
+
+The `docker-compose.yml` defines two services:
+
+```yaml docker-compose.yml
+services:
+  db:
+    image: postgres:15-alpine
+    container_name: telegrm-db
+    environment:
+      POSTGRES_DB: telegrmdb
+      POSTGRES_USER: ${DB_USER}
+      POSTGRES_PASSWORD: ${DB_PASSWORD}
+    ports:
+      - "5432:5432"
+    volumes:
+      - postgres_data:/var/lib/postgresql/data
+    healthcheck:
+      test: ["CMD-SHELL", "pg_isready -U ${DB_USER} -d telegrmdb"]
+      interval: 5s
+      timeout: 5s
+      retries: 5
+
+  app:
+    build: .
+    container_name: telegrm-api
+    env_file:
+      - .env
+    depends_on:
+      db:
+        condition: service_healthy
+    ports:
+      - "8080:8080"
+    environment:
+      DB_URL: jdbc:postgresql://db:5432/telegrmdb
+      DB_USERNAME: ${DB_USER}
+      DB_PASSWORD: ${DB_PASSWORD}
+      TELEGRAM_BOT_TOKEN: ${TELEGRAM_BOT_TOKEN}
+      OPENROUTE_KEY: ${OPENROUTE_KEY}
+      AI_SYSTEM_PROMPT: ${AI_SYSTEM_PROMPT}
+      AI_TEMPERATURE: ${AI_TEMPERATURE}
+      AI_MAX_TOKENS: ${AI_MAX_TOKENS}
+      JWT_SECRET: ${JWT_SECRET}
+```
+
+### Step 4: Build and Launch
+
+Start all services:
+
+```bash
+docker-compose up --build
+```
+
+<Note>
+**First Build:** Maven downloads dependencies and compiles the application. This takes 2-4 minutes.
+
+**Subsequent Builds:** Much faster as dependencies are cached.
+</Note>
+
+### Step 5: Verify Installation
+
+<Steps>
+  <Step title="Check Container Status">
+    ```bash
+    docker-compose ps
+    ```
+    
+    Both containers should show as `Up` and healthy:
+    ```
+    NAME           STATUS
+    telegrm-db     Up (healthy)
+    telegrm-api    Up
+    ```
+  </Step>
+  
+  <Step title="Verify Database Migration">
+    Check application logs for Flyway migrations:
+    
+    ```bash
+    docker-compose logs app | grep Flyway
+    ```
+    
+    You should see:
+    ```
+    Successfully applied 2 migrations
+    ```
+  </Step>
+  
+  <Step title="Test Application Health">
+    ```bash
+    curl http://localhost:8080/actuator/health
+    ```
+    
+    Response:
+    ```json
+    {"status":"UP"}
+    ```
+  </Step>
+  
+  <Step title="Access Swagger UI">
+    Open http://localhost:8080/swagger-ui.html in your browser.
+    
+    You should see the interactive API documentation.
+  </Step>
+</Steps>
+
+### Managing Docker Services
+
+```bash
+# Stop services (preserve data)
+docker-compose down
+
+# Stop and remove all data
+docker-compose down -v
+
+# View logs
+docker-compose logs -f
+
+# View app logs only
+docker-compose logs -f app
+
+# Restart services
+docker-compose restart
+
+# Rebuild after code changes
+docker-compose up --build
+```
+
+## Method 2: Local Development Setup
+
+### Step 1: Clone Repository
+
+```bash
+git clone https://github.com/acamus79/TlgrmBot.git
+cd TlgrmBot
+```
+
+### Step 2: Set Up PostgreSQL Database
+
+Create the database and user:
+
+```sql
+-- Connect to PostgreSQL
+psql -U postgres
+
+-- Create database
+CREATE DATABASE telegrmdb;
+
+-- Create user (optional - can use postgres user)
+CREATE USER telegrm_user WITH PASSWORD 'your_password';
+
+-- Grant privileges
+GRANT ALL PRIVILEGES ON DATABASE telegrmdb TO telegrm_user;
+
+-- Exit
+\q
+```
+
+### Step 3: Configure Application
+
+Set environment variables (choose your method):
+
+<CodeGroup>
+```bash Linux/macOS (Terminal)
+export DB_URL="jdbc:postgresql://localhost:5432/telegrmdb"
+export DB_USER="postgres"
+export DB_PASSWORD="your_password"
+export TELEGRAM_BOT_TOKEN="your_bot_token"
+export OPENROUTE_KEY="your_openrouter_key"
+export JWT_SECRET="your_jwt_secret"
+export AI_SYSTEM_PROMPT="You are a helpful assistant"
+export AI_TEMPERATURE="1.0"
+export AI_MAX_TOKENS="150"
+```
+
+```bash Windows (PowerShell)
+$env:DB_URL="jdbc:postgresql://localhost:5432/telegrmdb"
+$env:DB_USER="postgres"
+$env:DB_PASSWORD="your_password"
+$env:TELEGRAM_BOT_TOKEN="your_bot_token"
+$env:OPENROUTE_KEY="your_openrouter_key"
+$env:JWT_SECRET="your_jwt_secret"
+$env:AI_SYSTEM_PROMPT="You are a helpful assistant"
+$env:AI_TEMPERATURE="1.0"
+$env:AI_MAX_TOKENS="150"
+```
+
+```properties IntelliJ IDEA (Run Configuration)
+# Add to Run Configuration -> Environment Variables:
+DB_URL=jdbc:postgresql://localhost:5432/telegrmdb;
+DB_USER=postgres;
+DB_PASSWORD=your_password;
+TELEGRAM_BOT_TOKEN=your_bot_token;
+OPENROUTE_KEY=your_openrouter_key;
+JWT_SECRET=your_jwt_secret;
+AI_SYSTEM_PROMPT=You are a helpful assistant;
+AI_TEMPERATURE=1.0;
+AI_MAX_TOKENS=150
+```
+</CodeGroup>
+
+<Tip>
+**For IntelliJ IDEA:**
+1. Open Run → Edit Configurations
+2. Select your Spring Boot configuration
+3. Add environment variables in the "Environment variables" field
+4. Use semicolons (;) to separate variables
+</Tip>
+
+### Step 4: Build the Application
+
+```bash
+mvn clean install
+```
+
+This will:
+- Download all dependencies
+- Compile the source code
+- Run unit tests
+- Package the application as a JAR
+
+<Info>
+First build takes 1-2 minutes. Maven caches dependencies for faster subsequent builds.
+</Info>
+
+### Step 5: Run the Application
+
+<CodeGroup>
+```bash Maven
+mvn spring-boot:run
+```
+
+```bash Java JAR
+java -jar target/telegrm-0.0.1-SNAPSHOT.jar
+```
+
+```bash IntelliJ IDEA
+# Right-click TelegrmApplication.java
+# Select "Run 'TelegrmApplication'"
+```
+</CodeGroup>
+
+You should see:
+
+```
+  .   ____          _            __ _ _
+ /\\ / ___'_ __ _ _(_)_ __  __ _ \ \ \ \
+( ( )\___ | '_ | '_| | '_ \/ _` | \ \ \ \
+ \\/  ___)| |_)| | | | | || (_| |  ) ) ) )
+  '  |____| .__|_| |_|_| |_\__, | / / / /
+ =========|_|==============|___/=/_/_/_/
+
+Started TelegrmApplication in 6.248 seconds
+```
+
+### Step 6: Enable Hot Reload (Optional)
+
+Spring Boot DevTools enables automatic restart on code changes.
+
+It's already included in `pom.xml`:
+
+```xml pom.xml
+<dependency>
+    <groupId>org.springframework.boot</groupId>
+    <artifactId>spring-boot-devtools</artifactId>
+    <scope>runtime</scope>
+    <optional>true</optional>
+</dependency>
+```
+
+In IntelliJ IDEA:
+1. Go to Settings → Build, Execution, Deployment → Compiler
+2. Enable "Build project automatically"
+3. Press `Ctrl+Shift+A` → search for "Registry"
+4. Enable `compiler.automake.allow.when.app.running`
+
+Now your application will restart automatically when you save changes!
+
+## Database Migrations with Flyway
+
+The application uses **Flyway** for version-controlled database schema management.
+
+### Migration Files
+
+Located in `src/main/resources/db/migration/`:
+
+```
+db/migration/
+├── V1__create_users_table.sql
+└── V2__create_chat_tables.sql
+```
+
+### How Migrations Work
+
+<Steps>
+  <Step title="On Application Startup">
+    Flyway automatically:
+    1. Checks the current database schema version
+    2. Compares it with migration files
+    3. Applies any pending migrations in order
+    4. Records applied migrations in `flyway_schema_history` table
+  </Step>
+  
+  <Step title="Version Control">
+    Migration files follow the naming convention:
+    ```
+    V{version}__{description}.sql
+    ```
+    
+    Example: `V1__create_users_table.sql`
+  </Step>
+  
+  <Step title="Never Modify Applied Migrations">
+    Once a migration is applied to a database, **never modify it**. Instead, create a new migration file.
+  </Step>
+</Steps>
+
+<Warning>
+Flyway will fail to start if:
+- A migration file is modified after being applied
+- Migration files are out of order
+- A migration contains SQL syntax errors
+</Warning>
+
+### Configuration
+
+Flyway is configured in `application.yaml`:
+
+```yaml application.yaml
+spring:
+  flyway:
+    enabled: true
+    baseline-on-migrate: true
+```
+
+## Running Tests
+
+The project includes comprehensive tests using **JUnit 5**, **Mockito**, and **Testcontainers**.
+
+### Run All Tests
+
+```bash
+mvn clean verify
+```
+
+<Note>
+**Testcontainers** automatically spins up PostgreSQL in Docker for integration tests. Ensure Docker is running!
+</Note>
+
+### Run Unit Tests Only
+
+```bash
+mvn test
+```
+
+### Run Specific Test Class
+
+```bash
+mvn test -Dtest=RegisterUserUseCaseTest
+```
+
+### Test Structure
+
+```
+src/test/java/
+├── application/usecases/       # Use case tests
+├── domain/model/               # Domain model tests
+└── infrastructure/adapters/    # Integration tests
+```
+
+## Troubleshooting
+
+<AccordionGroup>
+  <Accordion title="Port 8080 already in use">
+    **Solution 1:** Change the port in `application.yaml`:
+    ```yaml
+    server:
+      port: 9090
+    ```
+    
+    **Solution 2:** Kill the process using port 8080:
+    ```bash
+    # Linux/macOS
+    lsof -ti:8080 | xargs kill -9
+    
+    # Windows
+    netstat -ano | findstr :8080
+    taskkill /PID <PID> /F
+    ```
+  </Accordion>
+  
+  <Accordion title="Database connection refused">
+    **Symptoms:**
+    ```
+    org.postgresql.util.PSQLException: Connection refused
+    ```
+    
+    **Solutions:**
+    1. Verify PostgreSQL is running:
+       ```bash
+       # Linux
+       sudo systemctl status postgresql
+       
+       # macOS
+       brew services list
+       ```
+    2. Check connection parameters in environment variables
+    3. Test connection manually:
+       ```bash
+       psql -h localhost -U postgres -d telegrmdb
+       ```
+    4. Verify firewall allows port 5432
+  </Accordion>
+  
+  <Accordion title="Flyway migration failures">
+    **Symptoms:**
+    ```
+    FlywayException: Validate failed: Migration checksum mismatch
+    ```
+    
+    **Solutions:**
+    1. **Development:** Drop and recreate the database:
+       ```sql
+       DROP DATABASE telegrmdb;
+       CREATE DATABASE telegrmdb;
+       ```
+    2. **Production:** Repair Flyway:
+       ```bash
+       mvn flyway:repair
+       ```
+    3. Never modify applied migration files
+  </Accordion>
+  
+  <Accordion title="Maven dependency download issues">
+    **Symptoms:**
+    ```
+    Failed to read artifact descriptor
+    ```
+    
+    **Solutions:**
+    1. Clear Maven cache:
+       ```bash
+       rm -rf ~/.m2/repository
+       mvn clean install
+       ```
+    2. Check internet connection
+    3. Try a different Maven repository mirror
+  </Accordion>
+  
+  <Accordion title="Telegram bot not responding">
+    **Symptoms:** Bot doesn't reply to messages
+    
+    **Solutions:**
+    1. Check logs for polling errors:
+       ```bash
+       docker-compose logs app | grep -i telegram
+       ```
+    2. Verify `TELEGRAM_BOT_TOKEN` is correct
+    3. Ensure only one instance is running (polling conflict)
+    4. Check that you sent `/start` or any message to the bot first
+    5. Verify bot is not blocked by the user
+  </Accordion>
+  
+  <Accordion title="OutOfMemoryError during build">
+    **Symptoms:**
+    ```
+    java.lang.OutOfMemoryError: Java heap space
+    ```
+    
+    **Solutions:**
+    1. Increase Maven memory:
+       ```bash
+       export MAVEN_OPTS="-Xmx2048m -XX:MaxPermSize=512m"
+       mvn clean install
+       ```
+    2. For IntelliJ IDEA: Increase heap size in Help → Edit Custom VM Options
+  </Accordion>
+  
+  <Accordion title="JWT token validation fails">
+    **Symptoms:**
+    ```
+    401 Unauthorized - Invalid token
+    ```
+    
+    **Solutions:**
+    1. Ensure `JWT_SECRET` is at least 32 characters
+    2. Generate a proper secret: `openssl rand -base64 32`
+    3. Verify token format: `Authorization: Bearer <token>`
+    4. Check token hasn't expired (24-hour validity)
+    5. Obtain a fresh token via `/auth/login`
+  </Accordion>
+</AccordionGroup>
+
+## IDE Setup
+
+### IntelliJ IDEA (Recommended)
+
+<Steps>
+  <Step title="Import Project">
+    1. File → Open → Select `pom.xml`
+    2. Choose "Open as Project"
+    3. Wait for Maven to import dependencies
+  </Step>
+  
+  <Step title="Install Lombok Plugin">
+    1. Settings → Plugins
+    2. Search for "Lombok"
+    3. Install and restart
+  </Step>
+  
+  <Step title="Enable Annotation Processing">
+    Settings → Build, Execution, Deployment → Compiler → Annotation Processors
+    
+    ✅ Enable annotation processing
+  </Step>
+  
+  <Step title="Configure Run Configuration">
+    1. Run → Edit Configurations → Add New → Spring Boot
+    2. Main class: `com.acamus.telegrm.TelegrmApplication`
+    3. Add environment variables (see Step 3 above)
+    4. Set working directory to project root
+  </Step>
+</Steps>
+
+### VS Code
+
+<Steps>
+  <Step title="Install Extensions">
+    Required extensions:
+    - Extension Pack for Java
+    - Spring Boot Extension Pack
+    - Lombok Annotations Support
+  </Step>
+  
+  <Step title="Configure Environment">
+    Create `.vscode/launch.json`:
+    ```json
+    {
+      "version": "0.2.0",
+      "configurations": [
+        {
+          "type": "java",
+          "name": "TelegrmApplication",
+          "request": "launch",
+          "mainClass": "com.acamus.telegrm.TelegrmApplication",
+          "env": {
+            "DB_URL": "jdbc:postgresql://localhost:5432/telegrmdb",
+            "DB_USER": "postgres",
+            "DB_PASSWORD": "your_password",
+            "TELEGRAM_BOT_TOKEN": "your_token",
+            "OPENROUTE_KEY": "your_key",
+            "JWT_SECRET": "your_secret"
+          }
+        }
+      ]
+    }
+    ```
+  </Step>
+</Steps>
+
+## Production Deployment Checklist
+
+<Steps>
+  <Step title="Security">
+    - [ ] Use strong, unique passwords for all services
+    - [ ] Rotate `JWT_SECRET` regularly
+    - [ ] Enable HTTPS with valid SSL certificate
+    - [ ] Configure firewall to restrict database access
+    - [ ] Never expose `.env` file publicly
+  </Step>
+  
+  <Step title="Database">
+    - [ ] Set up automated backups
+    - [ ] Configure connection pooling
+    - [ ] Enable SSL for database connections
+    - [ ] Monitor database performance
+  </Step>
+  
+  <Step title="Application">
+    - [ ] Set appropriate `AI_MAX_TOKENS` to control costs
+    - [ ] Configure logging (use external log aggregation)
+    - [ ] Set up health check monitoring
+    - [ ] Configure restart policies in Docker
+  </Step>
+  
+  <Step title="Monitoring">
+    - [ ] Enable Spring Boot Actuator endpoints
+    - [ ] Set up application performance monitoring (APM)
+    - [ ] Configure alerts for errors and downtime
+    - [ ] Monitor OpenRouter API usage and costs
+  </Step>
+</Steps>
+
+## Next Steps
+
+<CardGroup cols={2}>
+  <Card title="Quick Start Guide" icon="rocket" href="/quickstart">
+    Get the bot running and test the API endpoints
+  </Card>
+  
+  <Card title="API Documentation" icon="book">
+    Explore available endpoints in Swagger UI at http://localhost:8080/swagger-ui.html
+  </Card>
+  
+  <Card title="Architecture Deep Dive" icon="sitemap" href="/introduction">
+    Learn about the hexagonal architecture implementation
+  </Card>
+  
+  <Card title="Configuration Reference" icon="gear">
+    See `application.yaml` for all configuration options
+  </Card>
+</CardGroup>
+
+## Additional Resources
+
+- **Source Code:** https://github.com/acamus79/TlgrmBot
+- **Spring Boot Documentation:** https://spring.io/projects/spring-boot
+- **Telegram Bot API:** https://core.telegram.org/bots/api
+- **OpenRouter Documentation:** https://openrouter.ai/docs
+- **Flyway Documentation:** https://flywaydb.org/documentation

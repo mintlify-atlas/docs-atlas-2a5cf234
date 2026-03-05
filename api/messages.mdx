@@ -1,0 +1,406 @@
+---
+title: 'Messages'
+description: 'Send messages to Telegram conversations'
+icon: 'paper-plane'
+---
+
+## Overview
+
+The Messages API allows administrators to proactively send messages to Telegram conversations. This is useful for:
+
+- Broadcasting announcements to users
+- Initiating conversations without waiting for user input
+- Sending notifications or updates
+- Testing bot responses
+
+<Warning>
+  This endpoint requires authentication. Include a valid JWT token in the Authorization header.
+</Warning>
+
+## Send Message to Conversation
+
+<CodeGroup>
+
+```bash cURL
+curl -X POST http://localhost:8080/api/conversations/123456789/messages \
+  -H "Authorization: Bearer YOUR_JWT_TOKEN" \
+  -H "Content-Type: application/json" \
+  -d '{
+    "content": "Hello! This is a message from the admin panel."
+  }'
+```
+
+```bash cURL with Authentication Flow
+# Step 1: Login to get token
+TOKEN=$(curl -X POST http://localhost:8080/auth/login \
+  -H "Content-Type: application/json" \
+  -d '{"email":"admin@example.com","password":"password123"}' \
+  | jq -r '.token')
+
+# Step 2: Send message using token
+curl -X POST http://localhost:8080/api/conversations/123456789/messages \
+  -H "Authorization: Bearer $TOKEN" \
+  -H "Content-Type: application/json" \
+  -d '{
+    "content": "Your notification message here"
+  }'
+```
+
+```java Java Controller
+@PostMapping("/{id}/messages")
+public ResponseEntity<Void> sendMessage(
+    @PathVariable String id,
+    @Valid @RequestBody SendMessageRequest request
+) {
+    SendMessageCommand command = new SendMessageCommand(id, request.content());
+    sendMessagePort.sendMessage(command);
+    return ResponseEntity.ok().build();
+}
+```
+
+</CodeGroup>
+
+Sends a message from the admin to a specific Telegram conversation.
+
+### Endpoint
+
+```
+POST /api/conversations/{id}/messages
+```
+
+### Path Parameters
+
+<ParamField path="id" type="string" required>
+  The conversation ID (Telegram chat ID) to send the message to
+  
+  Example: `123456789`
+  
+  <Expandable title="How to get conversation IDs">
+    Use the `GET /api/conversations` endpoint to retrieve all conversation IDs:
+    
+    ```bash
+    curl -X GET http://localhost:8080/api/conversations \
+      -H "Authorization: Bearer YOUR_JWT_TOKEN"
+    ```
+  </Expandable>
+</ParamField>
+
+### Headers
+
+<ParamField header="Authorization" type="string" required>
+  Bearer token for authentication
+  
+  ```
+  Authorization: Bearer <your-jwt-token>
+  ```
+</ParamField>
+
+<ParamField header="Content-Type" type="string" required>
+  Must be `application/json`
+</ParamField>
+
+### Request Body
+
+<ParamField body="content" type="string" required>
+  The message text to send to the Telegram conversation
+  
+  <Expandable title="Validation Rules">
+    - Cannot be blank or empty
+    - Must contain at least one non-whitespace character
+    - No maximum length restriction (limited by Telegram's 4096 character limit)
+  </Expandable>
+</ParamField>
+
+### Request Example
+
+```json
+{
+  "content": "Hello! This is a proactive message from the admin panel. How can we help you today?"
+}
+```
+
+### Response
+
+On success, returns an empty response body with HTTP 200 status.
+
+### Success Response (200 OK)
+
+```
+HTTP/1.1 200 OK
+```
+
+No response body is returned. The message has been successfully sent to the Telegram chat.
+
+<Note>
+  The message will be delivered to the Telegram user in real-time via the bot. The message is also stored in the database and will appear in the conversation history with direction `OUTGOING`.
+</Note>
+
+### Error Responses
+
+<AccordionGroup>
+  <Accordion title="400 Bad Request - Validation Failed">
+    Returned when the message content is empty or invalid.
+    
+    ```json
+    {
+      "message": "Validation Failed",
+      "details": {
+        "content": "Content cannot be blank"
+      }
+    }
+    ```
+  </Accordion>
+
+  <Accordion title="400 Bad Request - Malformed JSON">
+    Returned when the request body is not valid JSON.
+    
+    ```json
+    {
+      "message": "Malformed Request",
+      "details": "Required request body is missing or unreadable."
+    }
+    ```
+  </Accordion>
+
+  <Accordion title="401 Unauthorized - Missing or Invalid Token">
+    Returned when authentication token is missing or expired.
+    
+    ```json
+    {
+      "message": "Authentication Failed",
+      "details": "JWT token is missing or invalid"
+    }
+    ```
+  </Accordion>
+
+  <Accordion title="404 Not Found - Conversation Not Found">
+    Returned when the specified conversation ID doesn't exist.
+    
+    ```json
+    {
+      "message": "Resource Not Found",
+      "details": "Conversation with ID '123456789' could not be found."
+    }
+    ```
+  </Accordion>
+</AccordionGroup>
+
+## Message Flow
+
+When you send a message via this endpoint:
+
+<Steps>
+  <Step title="API Receives Request">
+    Your authenticated request is validated and processed
+  </Step>
+  
+  <Step title="Message Stored">
+    The message is saved to the database with direction `OUTGOING`
+  </Step>
+  
+  <Step title="Telegram Delivery">
+    The message is sent to the Telegram user via the Bot API
+  </Step>
+  
+  <Step title="User Receives Message">
+    The Telegram user sees your message in their chat
+  </Step>
+</Steps>
+
+## Complete Example: Send Message Workflow
+
+Here's a complete workflow showing how to authenticate and send a message:
+
+<CodeGroup>
+
+```bash Complete Workflow
+#!/bin/bash
+
+# Step 1: Register (if needed)
+curl -X POST http://localhost:8080/auth/register \
+  -H "Content-Type: application/json" \
+  -d '{
+    "name": "Admin User",
+    "email": "admin@example.com",
+    "password": "securepass123"
+  }'
+
+# Step 2: Login and capture token
+TOKEN=$(curl -s -X POST http://localhost:8080/auth/login \
+  -H "Content-Type: application/json" \
+  -d '{
+    "email": "admin@example.com",
+    "password": "securepass123"
+  }' | jq -r '.token')
+
+echo "Token: $TOKEN"
+
+# Step 3: List conversations to get IDs
+echo "\nAvailable conversations:"
+curl -s -X GET http://localhost:8080/api/conversations \
+  -H "Authorization: Bearer $TOKEN" \
+  | jq '.'
+
+# Step 4: Send message to specific conversation
+CONV_ID="123456789"  # Replace with actual conversation ID
+
+curl -X POST http://localhost:8080/api/conversations/$CONV_ID/messages \
+  -H "Authorization: Bearer $TOKEN" \
+  -H "Content-Type: application/json" \
+  -d '{
+    "content": "Hello from the admin panel!"
+  }'
+
+echo "\nMessage sent successfully!"
+```
+
+```javascript JavaScript/Node.js
+const axios = require('axios');
+
+const API_BASE = 'http://localhost:8080';
+
+async function sendMessage() {
+  try {
+    // Step 1: Login
+    const loginResponse = await axios.post(`${API_BASE}/auth/login`, {
+      email: 'admin@example.com',
+      password: 'securepass123'
+    });
+    
+    const token = loginResponse.data.token;
+    console.log('Authenticated successfully');
+    
+    // Step 2: Get conversations
+    const conversationsResponse = await axios.get(
+      `${API_BASE}/api/conversations`,
+      {
+        headers: { Authorization: `Bearer ${token}` }
+      }
+    );
+    
+    console.log('Available conversations:', conversationsResponse.data);
+    
+    // Step 3: Send message
+    const conversationId = '123456789'; // Replace with actual ID
+    
+    await axios.post(
+      `${API_BASE}/api/conversations/${conversationId}/messages`,
+      {
+        content: 'Hello from JavaScript!'
+      },
+      {
+        headers: {
+          Authorization: `Bearer ${token}`,
+          'Content-Type': 'application/json'
+        }
+      }
+    );
+    
+    console.log('Message sent successfully!');
+    
+  } catch (error) {
+    console.error('Error:', error.response?.data || error.message);
+  }
+}
+
+sendMessage();
+```
+
+```python Python
+import requests
+
+API_BASE = 'http://localhost:8080'
+
+def send_message():
+    # Step 1: Login
+    login_response = requests.post(
+        f'{API_BASE}/auth/login',
+        json={
+            'email': 'admin@example.com',
+            'password': 'securepass123'
+        }
+    )
+    
+    token = login_response.json()['token']
+    print('Authenticated successfully')
+    
+    # Step 2: Get conversations
+    headers = {'Authorization': f'Bearer {token}'}
+    
+    conversations_response = requests.get(
+        f'{API_BASE}/api/conversations',
+        headers=headers
+    )
+    
+    print('Available conversations:', conversations_response.json())
+    
+    # Step 3: Send message
+    conversation_id = '123456789'  # Replace with actual ID
+    
+    send_response = requests.post(
+        f'{API_BASE}/api/conversations/{conversation_id}/messages',
+        headers=headers,
+        json={'content': 'Hello from Python!'}
+    )
+    
+    if send_response.status_code == 200:
+        print('Message sent successfully!')
+    else:
+        print('Error:', send_response.json())
+
+if __name__ == '__main__':
+    send_message()
+```
+
+</CodeGroup>
+
+## Use Cases
+
+<CardGroup cols={2}>
+  <Card title="Broadcast Announcements" icon="bullhorn">
+    Send important updates to all or specific users
+  </Card>
+  
+  <Card title="Proactive Support" icon="headset">
+    Reach out to users without waiting for them to message first
+  </Card>
+  
+  <Card title="Notifications" icon="bell">
+    Alert users about events, deadlines, or changes
+  </Card>
+  
+  <Card title="Testing" icon="flask">
+    Test bot responses and conversation flows
+  </Card>
+</CardGroup>
+
+## Best Practices
+
+<Tip>
+  **Keep messages concise**: While Telegram supports messages up to 4096 characters, shorter messages tend to have better engagement.
+</Tip>
+
+<Warning>
+  **Avoid spam**: Sending too many unsolicited messages may lead to users blocking your bot. Use this feature responsibly.
+</Warning>
+
+<Note>
+  **Message delivery**: Messages are sent asynchronously to Telegram. A successful API response (200 OK) means the message was accepted and queued for delivery, not that it was necessarily delivered to the user.
+</Note>
+
+## Source Code References
+
+- **Controller**: `ConversationController.java:72` (send message endpoint)
+- **DTO**: `SendMessageRequest.java:5` (request structure)
+- **Domain Model**: `Message.java:23` (message creation logic)
+
+## Next Steps
+
+<CardGroup cols={2}>
+  <Card title="View Conversations" icon="list" href="/api/conversations">
+    List conversations and view message history
+  </Card>
+  <Card title="Authentication" icon="key" href="/api/authentication">
+    Learn about JWT token authentication
+  </Card>
+</CardGroup>

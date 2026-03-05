@@ -1,0 +1,280 @@
+---
+title: 'Authentication'
+description: 'User registration and login endpoints'
+icon: 'key'
+---
+
+## Overview
+
+The TelegrmBot API uses JWT (JSON Web Token) authentication. Before accessing protected endpoints, you must:
+
+1. Register a new user account
+2. Login to obtain a JWT token
+3. Include the token in the Authorization header for subsequent requests
+
+<Note>
+  Authentication endpoints are public and do not require a JWT token.
+</Note>
+
+## Register New User
+
+<CodeGroup>
+
+```bash cURL
+curl -X POST http://localhost:8080/auth/register \
+  -H "Content-Type: application/json" \
+  -d '{
+    "name": "John Doe",
+    "email": "john@example.com",
+    "password": "securepassword123"
+  }'
+```
+
+```java Java Controller
+@PostMapping("/register")
+public ResponseEntity<RegisterResponse> register(
+    @Valid @RequestBody RegisterRequest request
+) {
+    RegisterUserCommand command = new RegisterUserCommand(
+        request.name(),
+        request.email(),
+        request.password()
+    );
+
+    User user = registerUserPort.register(command);
+
+    RegisterResponse response = new RegisterResponse(
+        user.getId(),
+        user.getEmail().value(),
+        user.getName()
+    );
+
+    return ResponseEntity.status(HttpStatus.CREATED).body(response);
+}
+```
+
+</CodeGroup>
+
+Creates a new user account for accessing the admin panel.
+
+### Endpoint
+
+```
+POST /auth/register
+```
+
+### Request Body
+
+<ParamField body="name" type="string" required>
+  Full name of the user
+  
+  <Expandable title="Validation Rules">
+    - Cannot be blank
+    - Must be a valid string
+  </Expandable>
+</ParamField>
+
+<ParamField body="email" type="string" required>
+  User's email address (must be unique)
+  
+  <Expandable title="Validation Rules">
+    - Cannot be blank
+    - Must be a valid email format
+    - Must not already exist in the system
+  </Expandable>
+</ParamField>
+
+<ParamField body="password" type="string" required>
+  User's password
+  
+  <Expandable title="Validation Rules">
+    - Cannot be blank
+    - Must be at least 6 characters long
+  </Expandable>
+</ParamField>
+
+### Response
+
+<ResponseField name="id" type="string">
+  Unique identifier for the created user (UUID format)
+</ResponseField>
+
+<ResponseField name="email" type="string">
+  Email address of the registered user
+</ResponseField>
+
+<ResponseField name="name" type="string">
+  Name of the registered user
+</ResponseField>
+
+### Success Response (201 Created)
+
+```json
+{
+  "id": "123e4567-e89b-12d3-a456-426614174000",
+  "email": "john@example.com",
+  "name": "John Doe"
+}
+```
+
+### Error Responses
+
+<AccordionGroup>
+  <Accordion title="400 Bad Request - Validation Failed">
+    ```json
+    {
+      "message": "Validation Failed",
+      "details": {
+        "email": "Invalid email format",
+        "password": "Password must be at least 6 characters long"
+      }
+    }
+    ```
+  </Accordion>
+
+  <Accordion title="409 Conflict - Email Already Exists">
+    ```json
+    {
+      "message": "User Registration Failed",
+      "details": "Email already registered in the system"
+    }
+    ```
+  </Accordion>
+</AccordionGroup>
+
+---
+
+## Login User
+
+<CodeGroup>
+
+```bash cURL
+curl -X POST http://localhost:8080/auth/login \
+  -H "Content-Type: application/json" \
+  -d '{
+    "email": "john@example.com",
+    "password": "securepassword123"
+  }'
+```
+
+```java Java Controller
+@PostMapping("/login")
+public ResponseEntity<LoginResponse> login(
+    @Valid @RequestBody LoginRequest request
+) {
+    AuthenticateUserCommand command = new AuthenticateUserCommand(
+        request.email(),
+        request.password()
+    );
+
+    String token = authenticateUserPort.authenticate(command);
+
+    return ResponseEntity.ok(new LoginResponse(token));
+}
+```
+
+</CodeGroup>
+
+Authenticates a user and returns a JWT token for accessing protected endpoints.
+
+### Endpoint
+
+```
+POST /auth/login
+```
+
+### Request Body
+
+<ParamField body="email" type="string" required>
+  User's email address
+  
+  <Expandable title="Validation Rules">
+    - Cannot be blank
+    - Must be a valid email format
+  </Expandable>
+</ParamField>
+
+<ParamField body="password" type="string" required>
+  User's password
+  
+  <Expandable title="Validation Rules">
+    - Cannot be blank
+  </Expandable>
+</ParamField>
+
+### Response
+
+<ResponseField name="token" type="string">
+  JWT token valid for 24 hours (86400000 milliseconds)
+  
+  Use this token in the Authorization header for protected endpoints:
+  ```
+  Authorization: Bearer <token>
+  ```
+</ResponseField>
+
+### Success Response (200 OK)
+
+```json
+{
+  "token": "eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.eyJzdWIiOiIxMjM0NTY3ODkwIiwibmFtZSI6IkpvaG4gRG9lIiwiaWF0IjoxNTE2MjM5MDIyfQ.SflKxwRJSMeKKF2QT4fwpMeJf36POk6yJV_adQssw5c"
+}
+```
+
+### Error Responses
+
+<AccordionGroup>
+  <Accordion title="400 Bad Request - Validation Failed">
+    ```json
+    {
+      "message": "Validation Failed",
+      "details": {
+        "email": "Invalid email format",
+        "password": "Password is required"
+      }
+    }
+    ```
+  </Accordion>
+
+  <Accordion title="401 Unauthorized - Invalid Credentials">
+    ```json
+    {
+      "message": "Authentication Failed",
+      "details": "Invalid email or password"
+    }
+    ```
+  </Accordion>
+</AccordionGroup>
+
+## Using the JWT Token
+
+After successful login, include the JWT token in all protected endpoint requests:
+
+```bash
+curl -X GET http://localhost:8080/api/conversations \
+  -H "Authorization: Bearer eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9..."
+```
+
+<Warning>
+  The JWT token expires after 24 hours. You'll need to login again to obtain a new token.
+</Warning>
+
+## Source Code References
+
+- **Controller**: `AuthController.java:42` (register), `AuthController.java:66` (login)
+- **DTOs**: 
+  - `RegisterRequest.java:7` - Registration request structure
+  - `RegisterResponse.java:3` - Registration response structure
+  - `LoginRequest.java:6` - Login request structure
+  - `LoginResponse.java:3` - Login response structure
+
+## Next Steps
+
+<CardGroup cols={2}>
+  <Card title="Conversations" icon="comments" href="/api/conversations">
+    Access conversation endpoints with your JWT token
+  </Card>
+  <Card title="Messages" icon="message" href="/api/messages">
+    Send messages to Telegram chats
+  </Card>
+</CardGroup>

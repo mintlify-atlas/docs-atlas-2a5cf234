@@ -1,0 +1,458 @@
+---
+title: AI Configuration
+description: Configure OpenRouter AI integration, model selection, and response behavior
+icon: brain
+---
+
+# AI Configuration
+
+The TelegramBot API uses OpenRouter to access various AI language models. This guide covers API setup, model selection, prompt engineering, and tuning response behavior.
+
+## OpenRouter Setup
+
+OpenRouter provides unified access to multiple AI models through a single API.
+
+<Steps>
+  <Step title="Create an account">
+    Visit [OpenRouter.ai](https://openrouter.ai) and sign up for an account.
+    
+    <Info>OpenRouter offers free models and paid premium models. Check the pricing page for current rates.</Info>
+  </Step>
+  
+  <Step title="Generate API key">
+    Navigate to the **Keys** section in your OpenRouter dashboard and create a new API key.
+    
+    Click **Create Key** and copy the generated key.
+  </Step>
+  
+  <Step title="Add credits (optional)">
+    For premium models, add credits to your account:
+    - Go to the **Credits** section
+    - Choose an amount to add
+    - Complete the payment
+    
+    <Note>Free models like `deepseek-r1t2-chimera:free` don't require credits.</Note>
+  </Step>
+  
+  <Step title="Configure in application">
+    Add your API key to the `.env` file:
+    
+    ```bash .env
+    OPENROUTE_KEY=sk-or-v1-abc123def456...
+    ```
+  </Step>
+</Steps>
+
+## Model Selection
+
+The default model is configured in `application.yaml`:
+
+```yaml application.yaml:26-29
+openrouter:
+  api-key: ${OPENROUTE_KEY}
+  base-url: https://openrouter.ai/api/v1
+  model: tngtech/deepseek-r1t2-chimera:free
+```
+
+### Available Models
+
+OpenRouter provides access to numerous models. Popular options include:
+
+<Accordion title="Free Models">
+  These models are free to use:
+  
+  - `tngtech/deepseek-r1t2-chimera:free` (default)
+  - `google/gemini-2.0-flash-001:free`
+  - `meta-llama/llama-3.1-8b-instruct:free`
+  - `mistralai/mistral-7b-instruct:free`
+  
+  <Info>Free models may have rate limits and lower priority during high demand.</Info>
+</Accordion>
+
+<Accordion title="Premium Models">
+  Paid models offering enhanced performance:
+  
+  - `anthropic/claude-3.5-sonnet` - Excellent reasoning and instruction following
+  - `openai/gpt-4-turbo` - Strong general performance
+  - `google/gemini-pro-1.5` - Large context window
+  - `deepseek/deepseek-chat` - Cost-effective reasoning
+  
+  <Note>Premium models require credits in your OpenRouter account.</Note>
+</Accordion>
+
+<Accordion title="Specialized Models">
+  Models optimized for specific tasks:
+  
+  - `reasoning` models - Better at logical reasoning
+  - `creative` models - Enhanced creative writing
+  - `code` models - Optimized for programming tasks
+  
+  Browse the full catalog at [OpenRouter Models](https://openrouter.ai/models).
+</Accordion>
+
+### Changing the Model
+
+To use a different model, update `application.yaml`:
+
+```yaml application.yaml:29
+model: anthropic/claude-3.5-sonnet
+```
+
+Or override with an environment variable:
+
+```bash .env
+OPENROUTER_MODEL=anthropic/claude-3.5-sonnet
+```
+
+<Warning>
+  Ensure your OpenRouter account has sufficient credits for premium models. Check pricing at [OpenRouter Pricing](https://openrouter.ai/pricing).
+</Warning>
+
+## System Prompt Configuration
+
+The system prompt defines your bot's personality and behavior.
+
+### Default Prompt
+
+The application includes a default "chaotic" Spanish AI personality:
+
+```yaml application.yaml:30
+system-prompt: ${AI_SYSTEM_PROMPT:"IA caótica en español sin lógica, patos espaciales, humor cambiante (no agresivo), sin ser útil."}
+```
+
+### Customizing the Prompt
+
+Define your own personality by setting `AI_SYSTEM_PROMPT` in `.env`:
+
+<CodeGroup>
+```bash Helpful Assistant
+AI_SYSTEM_PROMPT="You are a helpful and friendly assistant. Provide clear, accurate, and concise answers to user questions."
+```
+
+```bash Technical Expert
+AI_SYSTEM_PROMPT="You are a senior software engineer specializing in Java and Spring Boot. Provide technical guidance with code examples when appropriate."
+```
+
+```bash Creative Writer
+AI_SYSTEM_PROMPT="You are a creative writer who responds with poetic and imaginative language. Every response should be engaging and artistic."
+```
+
+```bash Customer Support
+AI_SYSTEM_PROMPT="You are a customer support agent for an e-commerce platform. Be professional, empathetic, and solution-oriented."
+```
+</CodeGroup>
+
+### Prompt Engineering Tips
+
+<Tip>
+  **Effective System Prompts Should:**
+  
+  1. **Define the role clearly**: "You are a..."
+  2. **Specify the tone**: professional, casual, humorous, formal
+  3. **Set boundaries**: what the bot should/shouldn't do
+  4. **Include formatting rules**: if you want specific response structures
+  5. **Mention language**: if you want responses in a specific language
+</Tip>
+
+## Temperature Settings
+
+Temperature controls response randomness and creativity.
+
+### Configuration
+
+```yaml application.yaml:31
+temperature: ${AI_TEMPERATURE:1.2}
+```
+
+Set in `.env`:
+
+```bash .env
+AI_TEMPERATURE=0.7
+```
+
+### Temperature Guide
+
+| Range | Behavior | Use Case |
+|-------|----------|----------|
+| `0.0 - 0.3` | Very deterministic, focused, repetitive | Technical Q&A, factual information |
+| `0.4 - 0.7` | Balanced, consistent, reliable | Customer support, documentation |
+| `0.8 - 1.2` | Creative, varied, engaging | Conversation bots, creative writing |
+| `1.3 - 1.7` | Highly creative, unpredictable | Entertainment, humor, brainstorming |
+| `1.8 - 2.0` | Chaotic, experimental, random | Experimental bots, art generation |
+
+<Info>
+  The default value of `1.2` is optimized for the "chaotic AI" personality. Adjust based on your desired bot behavior.
+</Info>
+
+## Max Tokens
+
+Controls the maximum length of AI responses.
+
+### Configuration
+
+```yaml application.yaml:32
+max-tokens: ${AI_MAX_TOKENS:150}
+```
+
+Set in `.env`:
+
+```bash .env
+AI_MAX_TOKENS=300
+```
+
+### Token Guidelines
+
+<Accordion title="What is a token?">
+  Tokens are pieces of words. Roughly:
+  - 1 token ≈ 4 characters in English
+  - 1 token ≈ ¾ of a word
+  - 100 tokens ≈ 75 words
+  
+  Example:
+  - "Hello world" = 2 tokens
+  - A typical paragraph = 50-100 tokens
+</Accordion>
+
+<Accordion title="Choosing the right value">
+  **Short responses (50-150 tokens):**
+  - Quick replies
+  - Chat bot interactions
+  - Lower API costs
+  
+  **Medium responses (150-500 tokens):**
+  - Detailed explanations
+  - Customer support
+  - Balanced cost and quality
+  
+  **Long responses (500-2000 tokens):**
+  - Articles or essays
+  - Technical documentation
+  - Higher API costs
+  
+  <Warning>Higher token limits increase costs proportionally. Monitor your OpenRouter usage.</Warning>
+</Accordion>
+
+## OpenRouter Configuration in Code
+
+### OpenRouterConfig
+
+The configuration class sets up the REST client:
+
+```java src/main/java/com/acamus/telegrm/infrastructure/config/OpenRouterConfig.java
+@Configuration
+public class OpenRouterConfig {
+
+    @Value("${openrouter.base-url}")
+    private String baseUrl;
+
+    @Value("${openrouter.api-key}")
+    private String apiKey;
+
+    @Bean
+    public RestClient openRouterRestClient() {
+        return RestClient.builder()
+                .baseUrl(baseUrl)
+                .defaultHeader("Authorization", "Bearer " + apiKey)
+                .defaultHeader("HTTP-Referer", "https://github.com/acamus/telegrm")
+                .defaultHeader("X-Title", "Telegrm Bot")
+                .build();
+    }
+}
+```
+
+### OpenRouterAdapter
+
+The adapter implements the AI generation logic:
+
+```java src/main/java/com/acamus/telegrm/infrastructure/adapters/out/ai/OpenRouterAdapter.java
+@Component
+public class OpenRouterAdapter implements AiGeneratorPort {
+
+    private final RestClient restClient;
+    private final String model;
+    private final String systemPrompt;
+    private final double temperature;
+    private final int maxTokens;
+
+    @Override
+    public String generateResponse(String userInput) {
+        ChatMessage systemMessage = new ChatMessage("system", systemPrompt, null);
+        ChatMessage userMessage = new ChatMessage("user", userInput, null);
+
+        OpenRouterRequest request = new OpenRouterRequest(
+            model, 
+            List.of(systemMessage, userMessage), 
+            maxTokens, 
+            temperature
+        );
+
+        OpenRouterResponse response = restClient.post()
+                .uri("/chat/completions")
+                .body(request)
+                .retrieve()
+                .body(OpenRouterResponse.class);
+
+        return response.choices().getFirst().message().content();
+    }
+}
+```
+
+## Testing AI Configuration
+
+<Steps>
+  <Step title="Start the application">
+    ```bash
+    docker-compose up --build
+    ```
+  </Step>
+  
+  <Step title="Send test messages">
+    Message your Telegram bot with various prompts to test:
+    - Response quality
+    - Personality consistency
+    - Response length
+    - Creativity level
+  </Step>
+  
+  <Step title="Monitor logs">
+    Check logs for AI processing:
+    
+    ```bash
+    docker-compose logs -f | grep -i "openrouter\|ai"
+    ```
+  </Step>
+  
+  <Step title="Adjust parameters">
+    Fine-tune `AI_TEMPERATURE` and `AI_MAX_TOKENS` based on results.
+  </Step>
+</Steps>
+
+## Error Handling
+
+The adapter includes comprehensive error handling:
+
+```java src/main/java/com/acamus/telegrm/infrastructure/adapters/out/ai/OpenRouterAdapter.java:60-66
+try {
+    // AI generation logic
+} catch (RestClientResponseException e) {
+    return "La IA rechazó mi petición (HTTP " + e.getStatusCode() + ").";
+} catch (ResourceAccessException e) {
+    return "No puedo conectar con la IA (Error de red).";
+} catch (Exception e) {
+    return "Ocurrió un error interno al procesar la respuesta de la IA: " + e.getMessage();
+}
+```
+
+### Common Errors
+
+<Accordion title="401 Unauthorized">
+  **Cause:** Invalid or missing API key
+  
+  **Solution:**
+  1. Verify `OPENROUTE_KEY` in `.env`
+  2. Check the key is active in OpenRouter dashboard
+  3. Ensure no extra spaces in the key
+</Accordion>
+
+<Accordion title="402 Payment Required">
+  **Cause:** Insufficient credits for premium models
+  
+  **Solution:**
+  1. Add credits to your OpenRouter account
+  2. Switch to a free model temporarily
+  3. Check usage at [OpenRouter Dashboard](https://openrouter.ai/activity)
+</Accordion>
+
+<Accordion title="429 Rate Limit Exceeded">
+  **Cause:** Too many requests in a short time
+  
+  **Solution:**
+  1. Reduce Telegram polling frequency
+  2. Implement request queuing
+  3. Upgrade OpenRouter plan for higher limits
+</Accordion>
+
+<Accordion title="500 Internal Server Error">
+  **Cause:** OpenRouter service issue
+  
+  **Solution:**
+  1. Check [OpenRouter Status](https://status.openrouter.ai)
+  2. Retry after a few minutes
+  3. Switch to a different model temporarily
+</Accordion>
+
+## Monitoring Usage and Costs
+
+<Info>
+  Track your AI usage to manage costs effectively:
+  
+  1. **OpenRouter Dashboard**: View real-time usage and costs
+  2. **Activity Log**: See individual API calls and token usage
+  3. **Set Limits**: Configure spending limits in your account
+</Info>
+
+### Usage Tracking
+
+Visit the [OpenRouter Activity Page](https://openrouter.ai/activity) to monitor:
+- Total API calls
+- Token usage per request
+- Cost per model
+- Daily/monthly spending
+
+## Advanced Configuration
+
+### Custom Headers
+
+The adapter sets custom headers for attribution:
+
+```java src/main/java/com/acamus/telegrm/infrastructure/config/OpenRouterConfig.java:22-23
+.defaultHeader("HTTP-Referer", "https://github.com/acamus/telegrm")
+.defaultHeader("X-Title", "Telegrm Bot")
+```
+
+These help OpenRouter attribute usage to your project.
+
+### Reasoning Support
+
+Some models support reasoning output. To enable it, uncomment in `OpenRouterAdapter.java`:
+
+```java src/main/java/com/acamus/telegrm/infrastructure/adapters/out/ai/OpenRouterAdapter.java:54-56
+// if (msg.reasoning() != null && !msg.reasoning().isBlank()) {
+//     return msg.reasoning();
+// }
+```
+
+<Note>
+  Reasoning shows the model's thought process before generating the final answer. Only supported by specific models like `deepseek-reasoner`.
+</Note>
+
+## Configuration Summary
+
+| Variable | Default | Purpose |
+|----------|---------|----------|
+| `OPENROUTE_KEY` | *required* | API authentication |
+| `AI_SYSTEM_PROMPT` | Chaotic Spanish AI | Bot personality |
+| `AI_TEMPERATURE` | `1.2` | Response creativity |
+| `AI_MAX_TOKENS` | `150` | Response length |
+| `openrouter.model` | `deepseek-r1t2-chimera:free` | AI model selection |
+| `openrouter.base-url` | `https://openrouter.ai/api/v1` | API endpoint |
+
+## Next Steps
+
+<CardGroup cols={2}>
+  <Card title="Telegram Setup" icon="telegram" href="/guides/telegram-setup">
+    Configure your Telegram bot
+  </Card>
+  
+  <Card title="Environment Config" icon="gear" href="/guides/configuration">
+    Review all configuration options
+  </Card>
+  
+  <Card title="Development" icon="code" href="/guides/development">
+    Set up your development environment
+  </Card>
+  
+  <Card title="Architecture" icon="building" href="/architecture/overview">
+    Understand the system architecture
+  </Card>
+</CardGroup>

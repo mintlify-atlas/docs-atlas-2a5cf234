@@ -1,0 +1,592 @@
+---
+title: Authentication
+description: Complete guide to JWT authentication, user registration, login, and securing API endpoints
+icon: lock
+---
+
+# Authentication
+
+The TelegramBot API uses JWT (JSON Web Tokens) for stateless authentication. This guide covers the complete authentication flow, from user registration to making authenticated requests.
+
+## Authentication Overview
+
+The API implements a standard JWT-based authentication system:
+
+<Steps>
+  <Step title="User registers">
+    Create an account with name, email, and password.
+  </Step>
+  
+  <Step title="User logs in">
+    Submit credentials to receive a JWT token.
+  </Step>
+  
+  <Step title="Client stores token">
+    Save the token securely (e.g., in secure storage, not localStorage for sensitive apps).
+  </Step>
+  
+  <Step title="Make authenticated requests">
+    Include the token in the `Authorization` header for protected endpoints.
+  </Step>
+</Steps>
+
+<Info>
+  The authentication system is built using **Spring Security** with custom JWT filters. Tokens expire after 24 hours by default.
+</Info>
+
+## User Registration
+
+### Endpoint
+
+```http
+POST /auth/register
+Content-Type: application/json
+```
+
+### Request Body
+
+```json
+{
+  "name": "John Doe",
+  "email": "john@example.com",
+  "password": "SecurePassword123!"
+}
+```
+
+<Accordion title="Field Validation">
+  **name**:
+  - Required
+  - String type
+  - No specific length requirements
+  
+  **email**:
+  - Required
+  - Must be a valid email format
+  - Must be unique (not already registered)
+  
+  **password**:
+  - Required
+  - String type
+  - Hashed using SCrypt before storage
+  
+  <Note>The API uses Spring Validation (`@Valid`) for input validation.</Note>
+</Accordion>
+
+### Response
+
+<CodeGroup>
+```json 201 Created
+{
+  "id": "550e8400-e29b-41d4-a716-446655440000",
+  "email": "john@example.com",
+  "name": "John Doe"
+}
+```
+
+```json 400 Bad Request
+{
+  "timestamp": "2026-03-05T14:30:00",
+  "message": "Email already exists",
+  "path": "/auth/register"
+}
+```
+</CodeGroup>
+
+### Registration Flow
+
+The registration process in code:
+
+```java src/main/java/com/acamus/telegrm/infrastructure/adapters/in/web/auth/AuthController.java:42-58
+@PostMapping("/register")
+public ResponseEntity<RegisterResponse> register(@Valid @RequestBody RegisterRequest request) {
+    RegisterUserCommand command = new RegisterUserCommand(
+        request.name(),
+        request.email(),
+        request.password()
+    );
+
+    User user = registerUserPort.register(command);
+
+    RegisterResponse response = new RegisterResponse(
+        user.getId(),
+        user.getEmail().value(),
+        user.getName()
+    );
+
+    return ResponseEntity.status(HttpStatus.CREATED).body(response);
+}
+```
+
+<Info>
+  Passwords are hashed using **SCrypt** with Bouncy Castle before being stored in the database. Plain-text passwords are never persisted.
+</Info>
+
+## User Login
+
+### Endpoint
+
+```http
+POST /auth/login
+Content-Type: application/json
+```
+
+### Request Body
+
+```json
+{
+  "email": "john@example.com",
+  "password": "SecurePassword123!"
+}
+```
+
+### Response
+
+<CodeGroup>
+```json 200 OK
+{
+  "token": "eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.eyJzdWIiOiI1NTBlODQwMC1lMjliLTQxZDQtYTcxNi00NDY2NTU0NDAwMDAiLCJlbWFpbCI6ImpvaG5AZXhhbXBsZS5jb20iLCJpYXQiOjE3MDk2NDk2MDAsImV4cCI6MTcwOTczNjAwMH0.signature"
+}
+```
+
+```json 401 Unauthorized
+{
+  "timestamp": "2026-03-05T14:30:00",
+  "message": "Invalid credentials",
+  "path": "/auth/login"
+}
+```
+</CodeGroup>
+
+### Login Flow
+
+The authentication process:
+
+```java src/main/java/com/acamus/telegrm/infrastructure/adapters/in/web/auth/AuthController.java:66-76
+@PostMapping("/login")
+public ResponseEntity<LoginResponse> login(@Valid @RequestBody LoginRequest request) {
+    AuthenticateUserCommand command = new AuthenticateUserCommand(
+        request.email(),
+        request.password()
+    );
+
+    String token = authenticateUserPort.authenticate(command);
+
+    return ResponseEntity.ok(new LoginResponse(token));
+}
+```
+
+## JWT Token Structure
+
+### Token Contents
+
+The JWT token contains:
+
+```json
+{
+  "sub": "550e8400-e29b-41d4-a716-446655440000",  // User ID
+  "email": "john@example.com",                    // User email
+  "iat": 1709649600,                               // Issued at timestamp
+  "exp": 1709736000                                // Expiration timestamp
+}
+```
+
+### Token Generation
+
+Tokens are generated using the `JwtTokenProvider`:
+
+```java src/main/java/com/acamus/telegrm/infrastructure/adapters/out/security/JwtTokenProvider.java:29-41
+@Override
+public String generateToken(User user) {
+    Date now = new Date();
+    Date expiryDate = new Date(now.getTime() + expiration);
+
+    return Jwts.builder()
+            .subject(user.getId())
+            .claim("email", user.getEmail().value())
+            .issuedAt(now)
+            .expiration(expiryDate)
+            .signWith(getSigningKey())
+            .compact();
+}
+```
+
+<Warning>
+  The JWT is signed using the `JWT_SECRET` from your environment configuration. Keep this secret secure and never commit it to version control!
+</Warning>
+
+### Token Expiration
+
+Configured in `application.yaml`:
+
+```yaml application.yaml:34-36
+jwt:
+  secret: ${JWT_SECRET}
+  expiration: 86400000 # 24 hours in milliseconds
+```
+
+<Info>
+  **Token Lifetime**: 24 hours (86400000 ms) by default. After expiration, users must log in again to get a new token.
+</Info>
+
+## Making Authenticated Requests
+
+### Using the Token
+
+Include the JWT token in the `Authorization` header:
+
+```http
+GET /conversations
+Authorization: Bearer eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9...
+```
+
+### Example with cURL
+
+```bash
+curl -X GET http://localhost:8080/conversations \
+  -H "Authorization: Bearer YOUR_TOKEN_HERE"
+```
+
+### Example with JavaScript
+
+```javascript
+const token = localStorage.getItem('jwt_token');
+
+fetch('http://localhost:8080/conversations', {
+  method: 'GET',
+  headers: {
+    'Authorization': `Bearer ${token}`,
+    'Content-Type': 'application/json'
+  }
+})
+.then(response => response.json())
+.then(data => console.log(data));
+```
+
+### Example with Python
+
+```python
+import requests
+
+token = "your_jwt_token_here"
+headers = {
+    "Authorization": f"Bearer {token}"
+}
+
+response = requests.get(
+    "http://localhost:8080/conversations",
+    headers=headers
+)
+
+print(response.json())
+```
+
+## Security Configuration
+
+The application's security is configured in `SecurityConfig`:
+
+```java src/main/java/com/acamus/telegrm/infrastructure/config/SecurityConfig.java:24-38
+@Bean
+public SecurityFilterChain securityFilterChain(HttpSecurity http) throws Exception {
+    http
+        .csrf(AbstractHttpConfigurer::disable)
+        .sessionManagement(session -> 
+            session.sessionCreationPolicy(SessionCreationPolicy.STATELESS)
+        )
+        .authorizeHttpRequests(auth -> auth
+            .requestMatchers("/auth/**", "/swagger-ui/**", "/v3/api-docs/**").permitAll()
+            .requestMatchers("/actuator/**").permitAll()
+            .requestMatchers("/error").permitAll()
+            .anyRequest().authenticated()
+        )
+        .addFilterBefore(jwtAuthenticationFilter, UsernamePasswordAuthenticationFilter.class);
+    
+    return http.build();
+}
+```
+
+### Public Endpoints
+
+These endpoints do **not** require authentication:
+
+| Endpoint | Description |
+|----------|-------------|
+| `/auth/register` | User registration |
+| `/auth/login` | User login |
+| `/swagger-ui/**` | API documentation |
+| `/v3/api-docs/**` | OpenAPI specification |
+| `/actuator/**` | Health checks and metrics |
+| `/error` | Error handling |
+
+### Protected Endpoints
+
+All other endpoints require a valid JWT token:
+
+| Endpoint | Description |
+|----------|-------------|
+| `GET /conversations` | List all conversations |
+| `GET /conversations/{id}/messages` | Get conversation messages |
+| `POST /conversations/{id}/messages` | Send a message |
+
+<Info>
+  Any request to a protected endpoint without a valid token will receive a `401 Unauthorized` response.
+</Info>
+
+## JWT Authentication Filter
+
+The filter intercepts every request to validate tokens:
+
+```java src/main/java/com/acamus/telegrm/infrastructure/config/JwtAuthenticationFilter.java:27-46
+@Override
+protected void doFilterInternal(HttpServletRequest request, HttpServletResponse response, FilterChain filterChain)
+        throws ServletException, IOException {
+
+    String token = getJwtFromRequest(request);
+
+    if (StringUtils.hasText(token) && tokenProvider.validateToken(token)) {
+        String email = tokenProvider.getEmailFromToken(token);
+
+        UserDetails userDetails = userDetailsService.loadUserByUsername(email);
+        UsernamePasswordAuthenticationToken authentication = new UsernamePasswordAuthenticationToken(
+                userDetails, null, userDetails.getAuthorities());
+        
+        authentication.setDetails(new WebAuthenticationDetailsSource().buildDetails(request));
+
+        SecurityContextHolder.getContext().setAuthentication(authentication);
+    }
+
+    filterChain.doFilter(request, response);
+}
+```
+
+### Filter Flow
+
+<Steps>
+  <Step title="Extract token">
+    Parse the `Authorization` header to get the JWT token.
+  </Step>
+  
+  <Step title="Validate token">
+    Verify the token signature and check expiration.
+  </Step>
+  
+  <Step title="Load user">
+    Retrieve user details from the database using the email from the token.
+  </Step>
+  
+  <Step title="Set authentication">
+    Store authentication in the Spring Security context for the request.
+  </Step>
+</Steps>
+
+### Token Extraction
+
+```java src/main/java/com/acamus/telegrm/infrastructure/config/JwtAuthenticationFilter.java:48-54
+private String getJwtFromRequest(HttpServletRequest request) {
+    String bearerToken = request.getHeader("Authorization");
+    if (StringUtils.hasText(bearerToken) && bearerToken.startsWith("Bearer ")) {
+        return bearerToken.substring(7);
+    }
+    return null;
+}
+```
+
+## Token Validation
+
+The token validation logic:
+
+```java src/main/java/com/acamus/telegrm/infrastructure/adapters/out/security/JwtTokenProvider.java:53-63
+public boolean validateToken(String token) {
+    try {
+        Jwts.parser()
+            .verifyWith(getSigningKey())
+            .build()
+            .parseSignedClaims(token);
+        return true;
+    } catch (JwtException | IllegalArgumentException e) {
+        return false;
+    }
+}
+```
+
+### Validation Checks
+
+- **Signature verification**: Token was signed with the correct secret
+- **Expiration check**: Token hasn't expired
+- **Format validation**: Token structure is valid
+
+## Testing Authentication
+
+### Using Swagger UI
+
+<Steps>
+  <Step title="Access Swagger">
+    Navigate to `http://localhost:8080/swagger-ui.html`
+  </Step>
+  
+  <Step title="Register a user">
+    Use the `POST /auth/register` endpoint to create an account.
+  </Step>
+  
+  <Step title="Login">
+    Use the `POST /auth/login` endpoint to get a token.
+  </Step>
+  
+  <Step title="Authorize">
+    Click the **Authorize** button (top right) and paste your token:
+    
+    ```
+    Bearer your_token_here
+    ```
+  </Step>
+  
+  <Step title="Test protected endpoints">
+    Try accessing protected endpoints like `GET /conversations`.
+  </Step>
+</Steps>
+
+### Using Postman/Bruno
+
+<Steps>
+  <Step title="Register">
+    Send a POST request to `/auth/register` with user details.
+  </Step>
+  
+  <Step title="Login">
+    Send a POST request to `/auth/login` and copy the token from the response.
+  </Step>
+  
+  <Step title="Set Authorization">
+    In Postman/Bruno:
+    - Go to the **Authorization** tab
+    - Select **Bearer Token** type
+    - Paste your token
+  </Step>
+  
+  <Step title="Make requests">
+    Send requests to protected endpoints.
+  </Step>
+</Steps>
+
+<Tip>
+  A Bruno collection is included in the project at `Bruno/`. Import it to get pre-configured requests.
+</Tip>
+
+## Common Authentication Errors
+
+<Accordion title="401 Unauthorized - Missing token">
+  **Cause:** No `Authorization` header provided
+  
+  **Response:**
+  ```json
+  {
+    "timestamp": "2026-03-05T14:30:00",
+    "message": "Unauthorized",
+    "path": "/conversations"
+  }
+  ```
+  
+  **Solution:** Include the `Authorization: Bearer <token>` header.
+</Accordion>
+
+<Accordion title="401 Unauthorized - Invalid token">
+  **Cause:** Token signature is invalid or token format is wrong
+  
+  **Solution:**
+  1. Verify you copied the complete token
+  2. Ensure the token starts with `Bearer `
+  3. Check the `JWT_SECRET` matches between token generation and validation
+</Accordion>
+
+<Accordion title="401 Unauthorized - Expired token">
+  **Cause:** Token has exceeded its 24-hour lifetime
+  
+  **Solution:** Log in again to get a fresh token:
+  
+  ```bash
+  curl -X POST http://localhost:8080/auth/login \
+    -H "Content-Type: application/json" \
+    -d '{"email":"john@example.com","password":"SecurePassword123!"}'
+  ```
+</Accordion>
+
+<Accordion title="400 Bad Request - Email already exists">
+  **Cause:** Attempting to register with an email that's already in use
+  
+  **Solution:** Use a different email or log in with the existing account.
+</Accordion>
+
+<Accordion title="401 Unauthorized - Invalid credentials">
+  **Cause:** Incorrect email or password during login
+  
+  **Solution:** Verify your credentials and try again.
+</Accordion>
+
+## Password Hashing
+
+Passwords are securely hashed using SCrypt:
+
+```java
+@Component
+public class PasswordHasher {
+    public String hash(String rawPassword) {
+        // Uses SCrypt with Bouncy Castle
+        // Cost: 16384, block size: 8, parallelization: 1
+    }
+    
+    public boolean verify(String rawPassword, String hashedPassword) {
+        // Verifies password against stored hash
+    }
+}
+```
+
+<Info>
+  **SCrypt** is a memory-hard key derivation function, making it resistant to brute-force attacks even with specialized hardware.
+</Info>
+
+## Best Practices
+
+<Warning>
+  **Security Recommendations:**
+  
+  1. **Never expose JWT_SECRET**: Keep it in `.env`, never commit to Git
+  2. **Use HTTPS in production**: Tokens can be intercepted over HTTP
+  3. **Store tokens securely**: Use secure storage (not localStorage for sensitive data)
+  4. **Implement token refresh**: Consider adding refresh token logic for better UX
+  5. **Validate on every request**: Never trust client-side validation alone
+  6. **Use strong passwords**: Enforce password complexity requirements
+  7. **Rate limit auth endpoints**: Prevent brute-force attacks
+  8. **Log authentication events**: Monitor for suspicious activity
+</Warning>
+
+## Architecture Integration
+
+The authentication system follows hexagonal architecture:
+
+- **Domain**: `User` entity, `Email` and `Password` value objects
+- **Ports**: `RegisterUserPort`, `AuthenticateUserPort`, `TokenGeneratorPort`
+- **Use Cases**: `RegisterUserUseCase`, `AuthenticateUserUseCase`
+- **Adapters**: `AuthController`, `JwtTokenProvider`, `PasswordHasher`
+
+<Info>
+  The authentication logic is completely decoupled from Spring Security implementation details, making it easy to test and maintain.
+</Info>
+
+## Next Steps
+
+<CardGroup cols={2}>
+  <Card title="API Reference" icon="book" href="/api/authentication">
+    Explore authentication endpoints in detail
+  </Card>
+  
+  <Card title="Development Guide" icon="code" href="/guides/development">
+    Set up your development environment
+  </Card>
+  
+  <Card title="Configuration" icon="gear" href="/guides/configuration">
+    Configure JWT secret and other settings
+  </Card>
+  
+  <Card title="Architecture" icon="building" href="/architecture/overview">
+    Learn about the hexagonal architecture
+  </Card>
+</CardGroup>
